@@ -1,0 +1,59 @@
+{
+  "catalog_id": "smlcrft_frames",
+  "name": "Smlcrft Frames",
+  "description": "Community frames published by smlcrft.",
+  "kind": "Frames",
+  "items": [
+    {
+      "kind": "Frames",
+      "id": "game_pancake_stacker",
+      "name": "Pancake Stacker",
+      "description": "Simple solo arcade game. A pancake swings back and forth at the top of the griddle \u2014 tap, click, or hit space to drop it onto the stack. Each pancake trims to the overlap with the one below, so the tower narrows as you climb. Miss entirely and the stack topples. High score per placement.",
+      "icon": "",
+      "modified_at": "2026-05-19T01:01:00Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 400,
+        "default_height_px": 640,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_pancake_stacker.tar.gz",
+      "package_sha256": "0574b27d5c5cb4994e24cbb62a32371ae7ab324fd32b2a9df8f693c98588409f"
+    },
+    {
+      "kind": "Frames",
+      "id": "garden_gnome",
+      "name": "Garden Gnome",
+      "description": "An at-a-glance helper for home gardeners. Set a location, pick your soil, tick the plants you grow, and Garden Gnome fetches local weather (Open-Meteo, keyless) every 15 minutes \u2014 past 5 days plus the next 24 hours \u2014 and shows three color-coded dots on a +/- spectrum next to each plant for water, temperature, and sunlight so you know when a plant is being naturally pampered or stressed.",
+      "icon": "",
+      "modified_at": "2026-05-19T01:55:00Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 560,
+        "default_height_px": 640,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/garden_gnome.tar.gz",
+      "package_sha256": "79567799548276c74e73c41a820b5909519017c604beeaf49fcd15860fb8ebb2"
+    },
+    {
+      "kind": "Frames",
+      "id": "space_radio",
+      "name": "Space Radio",
+      "description": "A synced web radio player for everyone in a space. Any space member can pick a station from a large list of public web stations \u2014 rock, pop, ambient, jazz, French, Italian, Australian, NPR, chiptune, and more \u2014 and everyone else in the space hears the same audio simultaneously. Play/pause and station selection are shared; each viewer's volume and mute are local and remembered between sessions.",
+      "icon": "",
+      "modified_at": "2026-05-18T01:00:00Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/space_radio.tar.gz",
+      "package_sha256": "a9757d949a5e56757cd51ee8376b3d8b5e283639c8bd2dbc393f519d1494b238"
+    }
+  ]
+}

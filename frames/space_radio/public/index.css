@@ -1,0 +1,248 @@
+/* Space Radio — synced shared player. Intentionally tiny chrome: dropdown, transport,
+   local volume. Members can drive transport; everyone hears the same stream. Per-user
+   volume + mute are stored in localStorage and never travel through the backend. */
+
+[hidden] { display: none !important; }
+
+body {
+  margin: 0; padding: 0;
+  background: var(--os-bg);
+  color: var(--os-text);
+  font-family: var(--os-font-sans);
+  font-size: var(--os-fs-sm);
+  -webkit-font-smoothing: antialiased;
+}
+
+.sr-loading {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; color: var(--os-text-subtle);
+}
+
+/* === PRIVATE / NON-MEMBER VIEW === */
+.sr-private {
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: var(--os-sp-sm);
+  min-height: 100vh; padding: var(--os-sp-lg);
+  text-align: center; color: var(--os-text-secondary);
+}
+.sr-private .ph-light { font-size: 24px; color: var(--os-text-subtle); opacity: 0.5; }
+.sr-private .sr-private-title { font-weight: var(--os-weight-medium); font-size: var(--os-fs-md); }
+.sr-private .sr-private-sub { font-size: var(--os-fs-xs); color: var(--os-text-muted); line-height: 1.5; max-width: 280px; }
+
+/* === ROOT === */
+.sr-root {
+  --ch: var(--os-c1);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+}
+.sr-accent {
+  height: 2px;
+  background: var(--ch);
+  flex: 0 0 auto;
+}
+
+/* === TOPLINE === */
+.sr-topline {
+  display: flex; align-items: center; gap: var(--os-sp-sm);
+  padding: var(--os-sp-sm) var(--os-sp-md);
+}
+.sr-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--os-fs-sm);
+  font-weight: var(--os-weight-medium);
+  color: var(--os-text);
+  letter-spacing: -0.005em;
+}
+.sr-title .ph-light { color: var(--ch); font-size: 16px; }
+.sr-spacer { flex: 1; }
+
+/* Live indicator — pulses when the room is actually playing. */
+.sr-live {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--os-text-muted);
+}
+.sr-live .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--os-text-subtle);
+  transition: background var(--os-transition-fast);
+}
+.sr-root.is-playing .sr-live .dot {
+  background: var(--ch);
+  box-shadow: 0 0 0 0 var(--ch);
+  animation: sr-pulse 1.6s ease-out infinite;
+}
+.sr-root.is-playing .sr-live { color: var(--os-text); }
+@keyframes sr-pulse {
+  0%   { box-shadow: 0 0 0 0    color-mix(in srgb, var(--ch), transparent 50%); }
+  70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--ch), transparent 100%); }
+  100% { box-shadow: 0 0 0 0    color-mix(in srgb, var(--ch), transparent 100%); }
+}
+
+/* === BODY — vertically centered, breathing layout === */
+.sr-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--os-sp-lg);
+  padding: var(--os-sp-xl) var(--os-sp-md);
+}
+
+/* === STATION DROPDOWN === */
+.sr-station {
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+}
+.sr-station-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--os-bg-surface);
+  border: 1px solid var(--os-border-color);
+  border-radius: var(--os-radius-md);
+  color: var(--os-text);
+  font: inherit;
+  font-size: var(--os-fs-md);
+  padding: 10px 36px 10px 14px;
+  cursor: pointer;
+  transition: border-color var(--os-transition-fast), background var(--os-transition-fast);
+}
+.sr-station-select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ch), var(--os-border-color) 60%);
+}
+.sr-station-select:focus {
+  outline: none;
+  border-color: var(--ch);
+  background: var(--os-bg-surface);
+}
+.sr-station-select:disabled {
+  cursor: not-allowed;
+  color: var(--os-text-secondary);
+  background: var(--os-bg-subtle);
+}
+.sr-station::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 8px; height: 8px;
+  border-right: 1.5px solid var(--os-text-muted);
+  border-bottom: 1.5px solid var(--os-text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* === TRANSPORT === */
+.sr-transport {
+  display: flex; align-items: center; gap: var(--os-sp-md);
+}
+.sr-play {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ch);
+  background: var(--os-bg-surface);
+  color: var(--ch);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 28px;
+  transition: background var(--os-transition-fast), transform var(--os-transition-fast), color var(--os-transition-fast);
+}
+.sr-play:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ch), transparent 90%);
+  filter: brightness(1.08);
+}
+.sr-play:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.sr-play:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.sr-root.is-playing .sr-play {
+  background: var(--ch);
+  color: var(--ch-fg, white);
+}
+
+/* === NOW-PLAYING META === */
+.sr-meta {
+  text-align: center;
+  min-height: 36px;
+}
+.sr-meta .sr-station-name {
+  font-size: var(--os-fs-md);
+  color: var(--os-text);
+  font-weight: var(--os-weight-medium);
+}
+.sr-meta .sr-by {
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-muted);
+  margin-top: 2px;
+  font-family: var(--os-font-mono);
+}
+.sr-meta .sr-hint {
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-muted);
+  margin-top: 6px;
+}
+.sr-meta .sr-hint.sr-hint-action { margin-top: 10px; }
+.sr-meta .sr-hint-btn {
+  font: inherit;
+  font-size: var(--os-fs-xs);
+  background: var(--ch);
+  color: var(--ch-fg, white);
+  border: none;
+  border-radius: var(--os-radius-full);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: filter var(--os-transition-fast), transform var(--os-transition-fast);
+}
+.sr-meta .sr-hint-btn:hover { filter: brightness(1.08); }
+.sr-meta .sr-hint-btn:active { transform: scale(0.97); }
+
+/* === LOCAL VOLUME (local only — does not sync) === */
+.sr-volume {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--os-bg-surface);
+  border: 1px solid var(--os-border-color);
+  border-radius: var(--os-radius-full);
+  padding: 4px 6px;
+}
+.sr-volume button {
+  width: 30px; height: 30px;
+  border: none; background: transparent;
+  border-radius: 50%;
+  color: var(--os-text-muted);
+  cursor: pointer; font-size: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--os-transition-fast), color var(--os-transition-fast), transform var(--os-transition-fast);
+}
+.sr-volume button:hover { color: var(--os-text); background: var(--os-bg-subtle); }
+.sr-volume button:active { transform: scale(0.9); }
+.sr-volume .sr-vol-readout {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; padding: 0 6px;
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-muted);
+  letter-spacing: 0.02em;
+}
+.sr-volume.muted .sr-vol-readout { color: var(--os-text-subtle); text-decoration: line-through; }
+.sr-volume.muted .sr-mute { color: var(--ch); }
+
+/* === FOOTER HINT === */
+.sr-footer {
+  flex: 0 0 auto;
+  padding: 6px var(--os-sp-md) var(--os-sp-sm);
+  text-align: center;
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-subtle);
+  font-family: var(--os-font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

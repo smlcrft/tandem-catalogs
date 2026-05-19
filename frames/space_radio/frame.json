@@ -1,0 +1,11 @@
+{
+    "name": "Space Radio",
+    "description": "A synced web radio player for everyone in a space. Any space member can pick a station from a large list of public web stations — rock, pop, ambient, jazz, French, Italian, Australian, NPR, chiptune, and more — and everyone else in the space hears the same audio simultaneously. Play/pause and station selection are shared; each viewer's volume and mute are local and remembered between sessions.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at": "2026-05-18T00:00:00Z",
+    "modified_at": "2026-05-18T01:00:00Z",
+    "depends_on_capabilities": []
+}

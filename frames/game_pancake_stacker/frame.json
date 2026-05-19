@@ -1,0 +1,13 @@
+{
+    "name": "Pancake Stacker",
+    "description": "Simple solo arcade game. A pancake swings back and forth at the top of the griddle — tap, click, or hit space to drop it onto the stack. Each pancake trims to the overlap with the one below, so the tower narrows as you climb. Miss entirely and the stack topples. High score per placement.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "default_width_px": 400,
+    "default_height_px": 640,
+    "created_at": "2026-05-19T00:00:00Z",
+    "modified_at": "2026-05-19T01:01:00Z",
+    "depends_on_capabilities": []
+}

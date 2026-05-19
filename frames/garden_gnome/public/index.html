@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Garden Gnome</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body class="ch5">
+  <header class="page-header">
+    <div class="title">
+      <i class="ph-light ph-plant icon-md"></i>
+      <h1>Garden Gnome</h1>
+    </div>
+    <div class="header-actions">
+      <span id="weather-chip" class="weather-chip hidden"></span>
+      <button id="settings-btn" class="ghost" title="Settings">
+        <i class="ph-light ph-gear icon-sm"></i>
+      </button>
+    </div>
+  </header>
+
+  <p id="setup-note" class="muted note hidden">
+    <i class="ph-light ph-info icon-sm"></i>
+    <span id="setup-text">Open settings to set your location and pick what you're growing.</span>
+  </p>
+
+  <section id="plants" class="plants"></section>
+
+  <p id="empty-note" class="muted note empty-note hidden">
+    <i class="ph-light ph-leaf icon-sm"></i>
+    No plants picked yet — open settings to choose what's growing.
+  </p>
+
+  <!-- Settings dialog -->
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="surface dialog">
+      <header class="dialog-header">
+        <h2>Garden settings</h2>
+        <button id="settings-close" class="ghost" title="Close">
+          <i class="ph-light ph-x icon-sm"></i>
+        </button>
+      </header>
+
+      <label class="field">
+        <span>Location (city, region, or zip)</span>
+        <input id="cfg-location" type="text" maxlength="120" placeholder="e.g. 97214 or Portland, Oregon">
+        <span class="muted hint">Used only to fetch weather from open-meteo.com.</span>
+      </label>
+
+      <fieldset class="field">
+        <legend>Soil type</legend>
+        <div id="cfg-soil" class="soil-list"></div>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend>Plants you're growing</legend>
+        <div id="cfg-plants" class="plant-grid"></div>
+      </fieldset>
+
+      <div class="dialog-actions">
+        <button id="settings-cancel" class="ghost">cancel</button>
+        <button id="settings-save">save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./index.js"></script>
+</body>
+</html>

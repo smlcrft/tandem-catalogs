@@ -1,0 +1,477 @@
+body {
+  margin: 0;
+  padding: var(--os-sp-lg);
+  background: var(--os-bg);
+  font-family: var(--os-font-sans);
+  color: var(--os-text);
+}
+
+.hidden { display: none !important; }
+
+/* ----- Header ----- */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--os-sp-md);
+  margin-bottom: var(--os-sp-md);
+  flex-wrap: wrap;
+}
+.page-header .title {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+}
+.page-header h1 {
+  margin: 0;
+  font-size: var(--os-fs-lg);
+  font-weight: var(--os-weight-semibold);
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+  flex-wrap: wrap;
+}
+
+.weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--os-sp-xs);
+  font-size: var(--os-fs-xs);
+  font-family: var(--os-font-mono);
+  color: var(--os-text-secondary);
+  background: var(--os-bg-subtle);
+  padding: 2px var(--os-sp-sm);
+  border-radius: var(--os-radius-full);
+  border: 1px solid var(--os-border-color-subtle);
+  white-space: nowrap;
+}
+
+/* ----- Notes ----- */
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-xs);
+  margin: 0 0 var(--os-sp-md);
+  font-size: var(--os-fs-sm);
+}
+.empty-note { margin-top: var(--os-sp-md); }
+
+/* ----- Legend ----- */
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--os-sp-md);
+  flex-wrap: wrap;
+  padding: var(--os-sp-sm) var(--os-sp-md);
+  margin-bottom: var(--os-sp-md);
+  background: var(--os-bg-subtle);
+  border-radius: var(--os-radius-md);
+  border: 1px solid var(--os-border-color-subtle);
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+}
+.legend-axis {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+}
+.legend-end {
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.spectrum-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-channels {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-xs);
+  flex-wrap: wrap;
+}
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-muted);
+  font-family: var(--os-font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ----- Plant cards (dashboard grid) -----
+ * Cards flow into auto-fill columns of at least 220px so a ten-plant garden lays
+ * out as 1 column on phones, 2-3 columns on a typical tandem placement, and a
+ * full dashboard on a wide screen. Within each card the spectrum sits below the
+ * label so it always has the full card width to draw the analog markers on.
+ */
+.plants {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--os-sp-sm);
+}
+.plant-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-sm);
+  padding: var(--os-sp-sm) var(--os-sp-md);
+  background: var(--os-bg-surface);
+  border: 1px solid var(--os-border-color-subtle);
+  border-radius: var(--os-radius-md);
+}
+.plant-card .plant-head {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+  flex-wrap: wrap;
+}
+.plant-card .plant-name { flex: 1; min-width: 0; }
+.plant-card .plant-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: var(--os-bg-subtle);
+  border-radius: var(--os-radius-full);
+  color: var(--os-fs-lg);
+  flex-shrink: 0;
+}
+.plant-card .plant-name {
+  font-size: var(--os-fs-md);
+  font-weight: var(--os-weight-medium);
+}
+
+/* ----- Spectrum (per-plant indicator strip) -----
+ * Score 0 sits at 50%. The plant's ideal band spans score -1..+1, which (with the
+ * marker margin baked into pct = 50 + score * 23) lands at 27%..73% on the bar —
+ * exactly the green span below. Yellow shoulders cover ±1..±1.5 (the "drift" zone),
+ * red caps the extremes. The bar carries all the meaning; markers stay neutral.
+ */
+.spectrum {
+  position: relative;
+  width: 100%;
+  height: 22px;
+}
+.spectrum_bg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    var(--os-cError-muted)    0%,
+    var(--os-cError-muted)    8%,
+    var(--os-cWarn-muted)    16%,
+    var(--os-cSuccess-muted) 27%,
+    var(--os-cSuccess-muted) 73%,
+    var(--os-cWarn-muted)    84%,
+    var(--os-cError-muted)   92%,
+    var(--os-cError-muted)  100%
+  );
+  border-radius: var(--os-radius-full);
+  border: 1px solid var(--os-border-color-subtle);
+  opacity: 0.35;
+}
+.spectrum::before,
+.spectrum::after {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-muted);
+}
+.spectrum::before { content: "−"; left: -10px; }
+.spectrum::after  { content: "+"; right: -10px; }
+.spectrum .tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.spectrum .tick.tick-mid { background: rgba(0, 0, 0, 0.22); }
+
+/* Markers — uniformly visible against any zone of the gradient.
+ * Dark slate fill + thin white halo reads against red, yellow, and green alike. */
+.spectrum .marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--os-radius-full);
+  background: var(--os-text);
+  color: var(--os-bg-surface);
+  border: 1.5px solid var(--os-bg-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  cursor: default;
+  transition: left var(--os-transition-normal);
+}
+.spectrum .marker i { font-size: 10px; line-height: 1; }
+
+/* Stagger when markers stack at similar positions so all three remain visible */
+.marker.ch-water { transform: translate(-50%, calc(-50% - 9px)); }
+.marker.ch-temp  { transform: translate(-50%, -50%); }
+.marker.ch-sun   { transform: translate(-50%, calc(-50% + 9px)); }
+.marker.ch-water { z-index: 1; }
+.marker.ch-temp  { z-index: 2; }
+.marker.ch-sun   { z-index: 3; }
+
+/* ----- Risk badges -----
+ * Compact icon chips that sit inline with the plant name. Each chip is a shaded circle
+ * keyed to the risk type (cold/hot/dry/soaked). Hovering surfaces the native title
+ * tooltip; clicking expands the chip in place to show the full label + advice. Tapping
+ * the chip again, or any other chip on the same card, collapses the prior expansion.
+ */
+.plant-card .risk-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+.risk-badge {
+  /* Default: icon-only circular chip */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--os-radius-full);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  flex-shrink: 0;
+  appearance: none;
+  color: var(--os-text);
+  -webkit-appearance: none;
+  transition: width var(--os-transition-fast), padding var(--os-transition-fast), filter var(--os-transition-fast);
+}
+.risk-badge:hover { filter: brightness(1.08); }
+.risk-badge:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.risk-badge i { font-size: 12px; line-height: 1; flex-shrink: 0; }
+.risk-badge .risk-label,
+.risk-badge .risk-advice { display: none; }
+
+/* Expanded chip: shows label and inline advice. width:auto + flex-wrap on .plant-head
+ * lets the expanded chip break to a new line on narrow cards instead of clipping. */
+.risk-badge.expanded {
+  width: auto;
+  padding: 2px var(--os-sp-sm) 2px 6px;
+  gap: 4px;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--os-radius-md);
+}
+.risk-badge.expanded .risk-label {
+  display: inline;
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-2xs);
+  font-weight: var(--os-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.risk-badge.expanded .risk-advice {
+  display: inline;
+  font-family: var(--os-font-sans);
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-secondary);
+  margin-left: var(--os-sp-xs);
+  padding-left: var(--os-sp-xs);
+  border-left: 1px solid currentColor;
+  opacity: 0.75;
+  white-space: normal;
+  text-align: left;
+  min-width: 0;
+}
+
+.risk--cold {
+  background: color-mix(in oklch, var(--os-c1-muted) 70%, transparent);
+  border-color: var(--os-c1);
+  /* color: var(--os-c1-fg); */
+}
+.risk--hot {
+  background: color-mix(in oklch, var(--os-cError-muted) 70%, transparent);
+  border-color: var(--os-cError);
+  /* color: var(--os-cError-fg); */
+}
+.risk--dry {
+  background: color-mix(in oklch, var(--os-cWarn-muted) 70%, transparent);
+  border-color: var(--os-c8, var(--os-cWarn));
+  /* color: var(--os-c8-fg, var(--os-cWarn-fg)); */
+}
+.risk--soaked {
+  background: color-mix(in oklch, var(--os-c7-muted) 60%, transparent);
+  border-color: var(--os-c7);
+  /* color: var(--os-c7-fg); */
+}
+
+/* Legend mini-dots — match the gradient zones, not the markers */
+.spectrum-mini .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--os-radius-full);
+}
+.dot--neg2 { background: var(--os-cError-fg); }
+.dot--neg1 { background: var(--os-cWarn-fg);  }
+.dot--zero { background: var(--os-cSuccess-fg); }
+.dot--pos1 { background: var(--os-cWarn-fg);  }
+.dot--pos2 { background: var(--os-cError-fg); }
+
+/* ----- Settings dialog ----- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--os-sp-md);
+  z-index: 100;
+}
+.dialog {
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 2 * var(--os-sp-md));
+  overflow-y: auto;
+  padding: var(--os-sp-lg);
+  background: var(--os-bg-surface);
+  border-radius: var(--os-radius-lg);
+  border: 1px solid var(--os-border-color);
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-md);
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--os-sp-sm);
+}
+.dialog-header h2 {
+  margin: 0;
+  font-size: var(--os-fs-lg);
+  font-weight: var(--os-weight-semibold);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--os-sp-sm);
+  margin-top: var(--os-sp-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-xs);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.field > span,
+.field > legend {
+  font-size: var(--os-fs-sm);
+  font-weight: var(--os-weight-medium);
+  color: var(--os-text-secondary);
+}
+.field .hint {
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-muted);
+}
+
+.soil-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-xs);
+}
+.soil-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--os-sp-sm);
+  padding: var(--os-sp-sm);
+  background: var(--os-bg-subtle);
+  border-radius: var(--os-radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color var(--os-transition-fast);
+}
+.soil-option:hover { border-color: var(--os-border-color-subtle); }
+.soil-option.checked {
+  border-color: var(--ch, var(--os-c5-fg));
+  background: var(--os-bg-surface);
+}
+.soil-option input[type="radio"] { margin-top: 3px; }
+.soil-option .soil-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.soil-option .soil-label {
+  font-size: var(--os-fs-sm);
+  font-weight: var(--os-weight-medium);
+}
+.soil-option .soil-desc {
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-muted);
+}
+
+.plant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--os-sp-xs);
+}
+.plant-option {
+  display: flex;
+  align-items: center;
+  gap: var(--os-sp-sm);
+  padding: var(--os-sp-sm);
+  background: var(--os-bg-subtle);
+  border-radius: var(--os-radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color var(--os-transition-fast);
+}
+.plant-option:hover { border-color: var(--os-border-color-subtle); }
+.plant-option.checked {
+  border-color: var(--ch, var(--os-c5-fg));
+  background: var(--os-bg-surface);
+}
+.plant-option .plant-label {
+  font-size: var(--os-fs-sm);
+  font-weight: var(--os-weight-medium);
+  flex: 1;
+}
+.plant-option .plant-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--os-radius-full);
+  background: var(--os-bg-surface);
+  color: var(--os-fs-lg);
+}
+
+/* ----- Responsive (settings dialog only — plant cards already collapse via auto-fill) ----- */
+@media (max-width: 480px) {
+  .plant-grid { grid-template-columns: 1fr; }
+}
