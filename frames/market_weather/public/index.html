@@ -13,6 +13,14 @@
       <i class="ph-light ph-storefront icon-md"></i>
       <h1>Market Weather</h1>
     </div>
+    <nav id="view-toggle" class="view-toggle hidden" role="tablist" aria-label="View">
+      <button id="view-events-btn" class="seg-btn active" role="tab" type="button" aria-selected="true">
+        <i class="ph-light ph-calendar-dots icon-sm"></i> Events
+      </button>
+      <button id="view-detail-btn" class="seg-btn" role="tab" type="button" aria-selected="false">
+        <i class="ph-light ph-chart-line icon-sm"></i> Detail
+      </button>
+    </nav>
     <div class="header-actions">
       <span id="weather-chip" class="weather-chip hidden"></span>
       <button id="settings-btn" class="ghost" title="Settings">
@@ -26,6 +34,16 @@
     <span id="setup-text">Open settings to set your market's location.</span>
   </p>
 
+  <!-- View A — events grid (default) -->
+  <section id="events-section" class="events-section hidden">
+    <p id="events-empty" class="muted note hidden">
+      <i class="ph-light ph-calendar-blank icon-sm"></i>
+      No events yet — open settings to add weekly events.
+    </p>
+    <div id="events-grid" class="events-grid"></div>
+  </section>
+
+  <!-- View B — chart + peak cards -->
   <section id="chart-section" class="chart-section hidden">
     <div class="chart-wrap">
       <canvas id="chart" width="800" height="320"></canvas>
@@ -62,6 +80,18 @@
         <span class="muted hint">Used only to fetch weather from open-meteo.com.</span>
       </label>
 
+      <fieldset class="field events-field">
+        <legend>Weekly events</legend>
+        <div id="cfg-events" class="events-editor"></div>
+        <button type="button" id="cfg-event-add" class="ghost add-event-btn">
+          <i class="ph-light ph-plus icon-sm"></i> Add event
+        </button>
+        <span class="muted hint">
+          Each event shows turnout for the next occurrence within the 72-hour forecast horizon.
+          Events further out show as pending.
+        </span>
+      </fieldset>
+
       <div class="dialog-actions">
         <button id="settings-cancel" class="ghost">cancel</button>
         <button id="settings-save">save</button>
@@ -69,6 +99,6 @@
     </div>
   </div>
 
-  <script src="./index.js"></script>
+  <script type="module" src="./index.js"></script>
 </body>
 </html>

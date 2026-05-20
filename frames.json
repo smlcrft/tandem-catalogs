@@ -10,7 +10,7 @@
       "name": "Pancake Stacker",
       "description": "Simple solo arcade game. A pancake swings back and forth at the top of the griddle \u2014 tap, click, or hit space to drop it onto the stack. Each pancake trims to the overlap with the one below, so the tower narrows as you climb. Miss entirely and the stack topples. High score per placement.",
       "icon": "",
-      "modified_at": "2026-05-19T01:01:00Z",
+      "modified_at": "2026-05-20T20:39:38Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 400,
@@ -19,7 +19,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_pancake_stacker.tar.gz",
-      "package_sha256": "0574b27d5c5cb4994e24cbb62a32371ae7ab324fd32b2a9df8f693c98588409f"
+      "package_sha256": "dca56ef34034a0da80eab25ac7b4a64b8bf6951ffa4f5e49b2fd907fb7175acc"
     },
     {
       "kind": "Frames",
@@ -27,7 +27,7 @@
       "name": "Garden Gnome",
       "description": "An at-a-glance helper for home gardeners. Set a location, pick your soil, tick the plants you grow, and Garden Gnome fetches local weather (Open-Meteo, keyless) every 15 minutes \u2014 past 5 days plus the next 24 hours \u2014 and shows three color-coded dots on a +/- spectrum next to each plant for water, temperature, and sunlight so you know when a plant is being naturally pampered or stressed.",
       "icon": "",
-      "modified_at": "2026-05-20T14:08:08Z",
+      "modified_at": "2026-05-20T20:39:38Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 560,
@@ -36,7 +36,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/garden_gnome.tar.gz",
-      "package_sha256": "6427af05517ad6357952ffbbff7f5f335ce3c889f96a3afa554bb746dc025f6a"
+      "package_sha256": "af1bccd183fbd84a0d4dcbd32a7c8a6362c0c4b299b3d5cea58b4affa31a7dbc"
     },
     {
       "kind": "Frames",
@@ -44,7 +44,7 @@
       "name": "Market Weather",
       "description": "A turnout forecaster for outdoor commerce \u2014 farmers markets, festivals, food trucks, street vendors, walkable storefronts. Set a location and Market Weather pulls 72 hours of weather from Open-Meteo (keyless), compares it against the last 30 days' local norms, and folds in temperature comfort, rain, UV, daylight, wind, weekend bonus, and time-of-day into a single composite turnout curve. The graph overlays each contributing factor as a faint band (daytime in pale yellow, rain in blue rising from the bottom, extreme heat/cold in red, weekend bonus in green) so you can see at a glance WHY the bold turnout line moves the way it does \u2014 and plan how much to stock, bake, or brew for the days ahead.",
       "icon": "",
-      "modified_at": "2026-05-20T15:30:41Z",
+      "modified_at": "2026-05-20T21:19:10Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 720,
@@ -53,7 +53,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/market_weather.tar.gz",
-      "package_sha256": "f0453c98388a8bccddd2ec9b5c92bd2be47ae1f54b5de21461be40c9218f4139"
+      "package_sha256": "0ce91b8f66aedf536b463007c292921672046c7d30550c92b9d6f2bb21fa11fd"
     },
     {
       "kind": "Frames",
@@ -61,7 +61,7 @@
       "name": "Space Radio",
       "description": "A synced web radio player for everyone in a space. Any space member can pick a station from a large list of public web stations \u2014 rock, pop, ambient, jazz, French, Italian, Australian, NPR, chiptune, and more \u2014 and everyone else in the space hears the same audio simultaneously. Play/pause and station selection are shared; each viewer's volume and mute are local and remembered between sessions.",
       "icon": "",
-      "modified_at": "2026-05-18T01:00:00Z",
+      "modified_at": "2026-05-20T20:39:38Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 0,
@@ -70,7 +70,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/space_radio.tar.gz",
-      "package_sha256": "a9757d949a5e56757cd51ee8376b3d8b5e283639c8bd2dbc393f519d1494b238"
+      "package_sha256": "2ac29c626b499a65dd7950a7ef11bb522383fd70b380be310f2ced121a39ce04"
     }
   ]
 }

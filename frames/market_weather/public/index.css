@@ -328,3 +328,222 @@ body {
   font-size: var(--os-fs-2xs);
   color: var(--os-text-muted);
 }
+
+/* ----- View toggle (View A / View B switch) ----- */
+/* Lives inside .page-header between the title and the header-actions. The
+ * auto inline-margin grabs spare flex space symmetrically so the toggle
+ * centers regardless of how wide the surrounding title or actions are.
+ * Margin is 0 vertically so the toggle never adds to the header's height. */
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--os-bg-inset);
+  border: 1px solid var(--os-border-color-subtle);
+  border-radius: var(--os-radius-full);
+  margin: 0;
+  margin-inline: auto;
+}
+.view-toggle .seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--os-sp-md);
+  border: none;
+  background: transparent;
+  color: var(--os-text-muted);
+  font: inherit;
+  font-size: var(--os-fs-sm);
+  font-weight: var(--os-weight-medium);
+  border-radius: var(--os-radius-full);
+  cursor: pointer;
+  transition: background var(--os-transition-fast), color var(--os-transition-fast);
+}
+.view-toggle .seg-btn:hover { color: var(--os-text); }
+.view-toggle .seg-btn.active {
+  background: var(--os-bg-surface);
+  color: var(--os-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ----- Events section (View A) ----- */
+.events-section { margin-top: var(--os-sp-sm); }
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--os-sp-sm);
+}
+.event-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-xs);
+  padding: var(--os-sp-md);
+  background: var(--os-bg-surface);
+  border: 1px solid var(--os-border-color-subtle);
+  border-radius: var(--os-radius-md);
+}
+/* Full-spectrum tier backgrounds — orange/yellow/light-gray/blue/green across
+ * the 20–80% turnout range. Event tiles and peak tiles share these classes so
+ * the visual signal is consistent across both views. In practice peak tiles
+ * never land in `vlow`/`low` (peakTier() only returns decent/nice/great), so
+ * those tints are seen primarily on event tiles configured for bad windows.
+ * Uses color-mix at ~22% over bg-surface so the tint reads at a glance without
+ * blowing out the foreground text. */
+.peak-card--vlow   { background: color-mix(in srgb, var(--os-c8) 22%, var(--os-bg-surface)); }
+.peak-card--low    { background: color-mix(in srgb, var(--os-c4) 22%, var(--os-bg-surface)); }
+/* .peak-card--decent uses bg-subtle (declared earlier in the peak-card block). */
+/* .peak-card--nice uses c1-muted (declared earlier). */
+/* .peak-card--great uses cSuccess-muted (declared earlier). */
+.event-card .event-name {
+  font-size: var(--os-fs-md);
+  font-weight: var(--os-weight-semibold);
+  color: var(--os-text);
+}
+/* Big-number figure — the engaging focal point. Vertically centered on its own
+ * row so the tile reads "headline → number → footnotes". The number itself
+ * picks up the tier color (set below) so a glance across a row of cards reads
+ * green/teal/neutral/red without scanning the text. */
+.event-card .event-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--os-sp-sm);
+  margin: 4px 0 2px;
+}
+.event-card .event-pct {
+  font-family: var(--os-font-mono);
+  font-size: 56px;
+  font-weight: var(--os-weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  color: var(--os-text);  /* tier-overridden below */
+}
+.event-card .event-pct-sign {
+  font-size: 0.42em;
+  font-weight: var(--os-weight-semibold);
+  letter-spacing: 0;
+  margin-left: 2px;
+  vertical-align: 0.6em;
+  color: inherit;
+  opacity: 0.7;
+}
+.event-card .event-tier-label {
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: var(--os-weight-semibold);
+  color: var(--os-text-muted);
+}
+.event-card .event-range {
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-xs);
+  color: var(--os-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Tier-colored big number — the actual signal. Background tints come from
+ * peak-card--<tier>; the number color is the bold version of the same hue, so
+ * the headline reinforces the muted background rather than fighting it. */
+.peak-card--vlow   .event-pct { color: var(--os-c8); }       /* orange */
+.peak-card--low    .event-pct { color: var(--os-c4); }       /* yellow / amber */
+.peak-card--decent .event-pct { color: var(--os-text); }     /* neutral */
+.peak-card--nice   .event-pct { color: var(--os-c1); }       /* blue / teal */
+.peak-card--great  .event-pct { color: var(--os-cSuccess); } /* green */
+.event-card .event-partial {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: var(--os-fs-2xs);
+  color: var(--os-text-muted);
+}
+
+/* Pending (out-of-horizon) tile — visually faded so the user can tell at a
+ * glance which events have actionable data vs. which are still days out. */
+.event-card--pending {
+  opacity: 0.55;
+  background: var(--os-bg-subtle);
+  border-style: dashed;
+}
+.event-card--pending .event-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--os-fs-sm);
+  color: var(--os-text-muted);
+  margin-top: var(--os-sp-xs);
+}
+
+/* ----- Events editor (inside settings dialog) ----- */
+.events-field { gap: var(--os-sp-sm); }
+.events-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--os-sp-xs);
+}
+.event-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr auto auto auto auto;
+  gap: var(--os-sp-xs);
+  align-items: center;
+}
+.event-row input,
+.event-row select {
+  font: inherit;
+  font-size: var(--os-fs-sm);
+  padding: 4px var(--os-sp-sm);
+  background: var(--os-bg);
+  border: 1px solid var(--os-border-color);
+  border-radius: var(--os-radius-sm);
+  color: var(--os-text);
+  min-width: 0;     /* let grid shrink inputs */
+}
+.event-row input:focus,
+.event-row select:focus {
+  outline: none;
+  background: var(--os-bg-surface);
+  border-color: var(--ch, var(--os-c1));
+}
+.event-row .ev-arrow {
+  color: var(--os-text-subtle);
+  font-family: var(--os-font-mono);
+  font-size: var(--os-fs-xs);
+  text-align: center;
+}
+.event-row .ev-del {
+  background: transparent;
+  border: none;
+  color: var(--os-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--os-radius-sm);
+}
+.event-row .ev-del:hover { color: var(--os-cError); background: var(--os-bg-inset); }
+.add-event-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed var(--os-border-color);
+  color: var(--os-text-muted);
+  padding: 4px var(--os-sp-sm);
+  border-radius: var(--os-radius-sm);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--os-fs-sm);
+}
+.add-event-btn:hover { color: var(--os-text); border-color: var(--os-text-subtle); }
+@media (max-width: 540px) {
+  .event-row {
+    grid-template-columns: 1fr auto;
+    grid-auto-rows: auto;
+  }
+  .event-row .ev-name { grid-column: 1 / 2; }
+  .event-row .ev-del  { grid-column: 2 / 3; }
+  .event-row .ev-dow  { grid-column: 1 / 3; }
+  .event-row .ev-start, .event-row .ev-arrow, .event-row .ev-end {
+    grid-column: auto;
+  }
+}

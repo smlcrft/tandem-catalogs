@@ -9,6 +9,8 @@
 // (sfi_id, device_id), so each user's preferences travel with their device and survive
 // app restarts (the Tauri webview's localStorage doesn't reliably survive those).
 // ----------------------------------------------------------------------------------------
+import { frame } from "/lib/js/framelib.js";
+
 (() => {
   const app = document.getElementById("app");
   const peer = window.__peer || {};
@@ -17,6 +19,20 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[m]));
+
+  // Thin wrapper over frame.api that extracts the backend's `{error: "…"}` body
+  // (when present) onto the thrown Error's `.message` so existing showHint()
+  // callers see the readable error instead of "frame.api POST … → 400".
+  async function api(path, body, method) {
+    try { return (await frame.api(path, body, method)) || {}; }
+    catch (err) {
+      let msg = err && err.message;
+      try { const j = JSON.parse((err && err.body) || ""); if (j && j.error) msg = j.error; } catch (_) { /* keep raw msg */ }
+      const e = new Error(msg);
+      e.status = err && err.status;
+      throw e;
+    }
+  }
 
   let stations = [];
   let stationById = new Map();
@@ -47,20 +63,11 @@
     `;
   }
 
-  async function fetchJson(url, opts) {
-    const res = await fetch(url, opts);
-    const txt = await res.text();
-    let json = null;
-    try { json = txt ? JSON.parse(txt) : null; } catch { /* ignore */ }
-    if (!res.ok) throw new Error((json && json.error) || `HTTP ${res.status}`);
-    return json || {};
-  }
-
   async function load() {
     if (!isSfiMember) { renderPrivate(); return; }
     let data;
     try {
-      data = await fetchJson("./api/state");
+      data = await api("api/state");
     } catch (err) {
       if (String(err && err.message || "").indexOf("private frame") >= 0) {
         renderPrivate();
@@ -93,11 +100,7 @@
     _localSaveTimer = setTimeout(async () => {
       _localSaveTimer = null;
       try {
-        await fetchJson("./api/local-set", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ volume, muted }),
-        });
+        await api("api/local-set", { volume, muted });
       } catch {
         // Best-effort persistence — failure just means next reload starts from defaults.
       }
@@ -249,11 +252,7 @@
       // Changing the station auto-starts playback (the natural expectation for radio).
       // Empty selection clears + stops.
       try {
-        await fetchJson("./api/set", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ station_id: id, playing: !!id }),
-        });
+        await api("api/set", { station_id: id, playing: !!id });
       } catch (err) {
         // Snap dropdown back to authoritative state on failure.
         sel.value = playstate.station_id || "";
@@ -269,11 +268,7 @@
       if (!playstate.station_id) return;
       const nextPlaying = !playstate.playing;
       try {
-        await fetchJson("./api/set", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ playing: nextPlaying }),
-        });
+        await api("api/set", { playing: nextPlaying });
       } catch (err) {
         showHint(err.message || "toggle failed");
       }

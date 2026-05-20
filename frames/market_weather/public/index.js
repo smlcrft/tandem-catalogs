@@ -1,9 +1,8 @@
+import { frame } from "/lib/js/framelib.js";
+
 (function () {
   const peer = window.__peer || {};
   const isAnon = peer.is_anon === "1" || !peer.user_id;
-
-  const urlSfi = new URLSearchParams(location.search).get("sfi") || "";
-  const withSfi = (u) => !urlSfi ? u : u + (u.includes("?") ? "&" : "?") + "sfi=" + encodeURIComponent(urlSfi);
 
   const $ = (id) => document.getElementById(id);
 
@@ -603,24 +602,275 @@
     });
   }
 
+  // ----- View A: weekly events ---------------------------------------------------------
+  // For each configured event, compute the NEXT occurrence in the location's local
+  // clock. If the start is past the 72h forecast horizon → render a "pending" tile.
+  // Otherwise pick the forecast hours that overlap the window, compute quartile stats
+  // of turnout_pct across them, and render a tile with median + box plot + tier color.
+
+  const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const HOUR_MS = 3600 * 1000;
+
+  // Current view: "events" (default) | "detail"
+  let currentView = "events";
+
+  function locationOffsetMs() {
+    return (state.weather && state.weather.utc_offset_seconds || 0) * 1000;
+  }
+
+  // Returns the next start instant for `ev` as a true UTC ms.
+  function nextEventStartMs(ev) {
+    const offsetMs = locationOffsetMs();
+    const serverNow = state.now || Date.now();
+    // Build a Date whose getUTC* methods read location-local fields.
+    const localNow = new Date(serverNow + offsetMs);
+    const currentDow = localNow.getUTCDay();
+    const currentMinuteOfDay = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+    const endMinute = ev.end_hh * 60 + ev.end_mm;
+
+    let daysAhead = (ev.day_of_week - currentDow + 7) % 7;
+    // If today IS the event day but the event is already over, push to next week.
+    if (daysAhead === 0 && currentMinuteOfDay >= endMinute) daysAhead = 7;
+
+    const local = new Date(localNow.getTime());
+    local.setUTCDate(local.getUTCDate() + daysAhead);
+    local.setUTCHours(ev.start_hh, ev.start_mm, 0, 0);
+    return local.getTime() - offsetMs;
+  }
+
+  function eventDurationMinutes(ev) {
+    const s = ev.start_hh * 60 + ev.start_mm;
+    const e = ev.end_hh * 60 + ev.end_mm;
+    // Defensive: end ≤ start collapses to 1h (no negative or zero durations).
+    return e > s ? (e - s) : 60;
+  }
+
+  function nextEventEndMs(ev) {
+    return nextEventStartMs(ev) + eventDurationMinutes(ev) * 60 * 1000;
+  }
+
+  // Pick reading indices that overlap [startMs, endMs) — reading[i] covers [ms, ms+1h).
+  function readingsOverlapping(startMs, endMs) {
+    const out = [];
+    for (let i = 0; i < state.readings.length; i++) {
+      const r = state.readings[i];
+      const rStart = r.ms;
+      const rEnd = r.ms + HOUR_MS;
+      if (rEnd > startMs && rStart < endMs) out.push(i);
+    }
+    return out;
+  }
+
+  // Linear-interpolated quantile on a pre-sorted array.
+  function quantile(sortedAsc, p) {
+    if (sortedAsc.length === 0) return 0;
+    if (sortedAsc.length === 1) return sortedAsc[0];
+    const idx = (sortedAsc.length - 1) * p;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
+  }
+
+  // 5-bucket spectrum across the 20–80% turnout range. Greens for strong, blues
+  // for good, light gray neutral, yellow for soft, orange for very low. Each
+  // bucket maps to a peak-card--<tier> CSS class (the existing peak card style)
+  // so event tiles and peak tiles share their visual vocabulary.
+  function eventTier(meanPct) {
+    if (meanPct >= 80) return "great";   // green   — strong
+    if (meanPct >= 60) return "nice";    // blue    — good
+    if (meanPct >= 40) return "decent";  // gray    — neutral
+    if (meanPct >= 20) return "low";     // yellow  — soft
+    return "vlow";                        // orange  — very low
+  }
+
+  function tierLabel(tier) {
+    return tier === "great"  ? "Strong turnout"
+      :  tier === "nice"   ? "Good turnout"
+      :  tier === "decent" ? "Moderate turnout"
+      :  tier === "low"    ? "Light turnout"
+      :                       "Very low turnout";
+  }
+
+  function fmtMinuteClock(hh, mm) {
+    const m = String(mm).padStart(2, "0");
+    if (hh === 0) return "12:" + m + "am";
+    if (hh === 12) return "12:" + m + "pm";
+    return (hh % 12) + ":" + m + (hh < 12 ? "am" : "pm");
+  }
+
+  function fmtEventDate(ms) {
+    // Format in the LOCATION's local clock, not the viewer's.
+    const d = new Date(ms + locationOffsetMs());
+    return DOW_SHORT[d.getUTCDay()] + " " + (d.getUTCMonth() + 1) + "/" + d.getUTCDate();
+  }
+
+  function whyForReadingRange(indices) {
+    // Reuse the same factor-aggregation as whyForPeak but for an arbitrary list of
+    // reading indices. Returns a short human "why" string or "" if no positive
+    // contributors stand out.
+    if (!indices.length) return "";
+    const start = indices[0], end = indices[indices.length - 1];
+    return whyForPeak({ start, end });
+  }
+
+  function renderEvents() {
+    const section = $("events-section");
+    const grid = $("events-grid");
+    const empty = $("events-empty");
+    const events = (state.prefs && state.prefs.events) || [];
+
+    if (currentView !== "events") { section.classList.add("hidden"); return; }
+    if (!state.prefs || !state.prefs.location || !state.weather) {
+      // Setup-note already explains; just leave the section hidden.
+      section.classList.add("hidden");
+      return;
+    }
+    section.classList.remove("hidden");
+
+    if (events.length === 0) {
+      empty.classList.remove("hidden");
+      grid.innerHTML = "";
+      return;
+    }
+    empty.classList.add("hidden");
+
+    const horizonMs = state.now + 72 * HOUR_MS;
+    const cards = events.slice().map((ev) => {
+      const startMs = nextEventStartMs(ev);
+      const endMs = nextEventEndMs(ev);
+      const dayLabel = fmtEventDate(startMs);
+      const timeLabel = fmtMinuteClock(ev.start_hh, ev.start_mm) + " – " + fmtMinuteClock(ev.end_hh, ev.end_mm);
+
+      // Pending: start is past the forecast horizon.
+      if (startMs > horizonMs) {
+        const daysOut = Math.max(1, Math.ceil((startMs - state.now) / (24 * HOUR_MS)));
+        return {
+          startMs,
+          html:
+            '<article class="event-card event-card--pending">' +
+              '<div class="p-day">' + escapeHTML(dayLabel) + ' · ' + escapeHTML(timeLabel) + '</div>' +
+              '<div class="event-name">' + escapeHTML(ev.name || "(unnamed)") + '</div>' +
+              '<div class="event-pending">' +
+                '<i class="ph-light ph-clock-countdown icon-sm"></i> ' +
+                'Forecast not yet available · ' + daysOut + 'd out' +
+              '</div>' +
+            '</article>',
+        };
+      }
+
+      const overlap = readingsOverlapping(startMs, endMs);
+      const turnouts = overlap.map((i) => state.readings[i].turnout_pct);
+      // It's possible (rare) for the window to be partly past the horizon — that's fine,
+      // we just have fewer hours to summarize. Flag it so the user knows.
+      const expectedHours = Math.max(1, Math.ceil(eventDurationMinutes(ev) / 60));
+      const partial = overlap.length < expectedHours;
+
+      if (turnouts.length === 0) {
+        // Window started but no readings overlap (e.g., entire window in the past by now).
+        // Treat as pending-ish: the user might want to remove this event or wait for next.
+        return {
+          startMs,
+          html:
+            '<article class="event-card event-card--pending">' +
+              '<div class="p-day">' + escapeHTML(dayLabel) + ' · ' + escapeHTML(timeLabel) + '</div>' +
+              '<div class="event-name">' + escapeHTML(ev.name || "(unnamed)") + '</div>' +
+              '<div class="event-pending">' +
+                '<i class="ph-light ph-hourglass icon-sm"></i> No overlapping forecast hours' +
+              '</div>' +
+            '</article>',
+        };
+      }
+
+      const sorted = turnouts.slice().sort((a, b) => a - b);
+      const min = Math.round(sorted[0]);
+      const max = Math.round(sorted[sorted.length - 1]);
+      const med = Math.round(quantile(sorted, 0.5));
+      const tier = eventTier(med);
+      const why = whyForReadingRange(overlap);
+      const partialNote = partial
+        ? '<div class="event-partial"><i class="ph-light ph-warning-circle icon-sm"></i> Partial forecast: ' +
+            overlap.length + ' of ' + expectedHours + ' hours covered</div>'
+        : "";
+      // If min and max collapse to the same value the window had a flat forecast —
+      // skip the redundant "X–X%" line so the card reads cleaner.
+      const rangeNote = (min !== max)
+        ? '<div class="event-range">range ' + min + '% – ' + max + '%</div>'
+        : "";
+
+      return {
+        startMs,
+        html:
+          '<article class="event-card peak-card peak-card--' + tier + '">' +
+            '<div class="p-day">' + escapeHTML(dayLabel) + ' · ' + escapeHTML(timeLabel) + '</div>' +
+            '<div class="event-name">' + escapeHTML(ev.name || "(unnamed)") + '</div>' +
+            '<div class="event-figure">' +
+              '<span class="event-pct">' + med + '<span class="event-pct-sign">%</span></span>' +
+              '<span class="event-tier-label">' + tierLabel(tier) + '</span>' +
+            '</div>' +
+            rangeNote +
+            (why ? '<div class="p-why">' + escapeHTML(why) + '</div>' : "") +
+            partialNote +
+          '</article>',
+      };
+    });
+
+    // Sort upcoming-first so the next event is leftmost / topmost. Pending events at
+    // the end of the list (further in time).
+    cards.sort((a, b) => a.startMs - b.startMs);
+    grid.innerHTML = cards.map((c) => c.html).join("");
+  }
+
+  // ----- View toggle -------------------------------------------------------------------
+  function setView(v) {
+    currentView = (v === "detail") ? "detail" : "events";
+    const evBtn = $("view-events-btn");
+    const dtBtn = $("view-detail-btn");
+    evBtn.classList.toggle("active", currentView === "events");
+    dtBtn.classList.toggle("active", currentView === "detail");
+    evBtn.setAttribute("aria-selected", currentView === "events" ? "true" : "false");
+    dtBtn.setAttribute("aria-selected", currentView === "detail" ? "true" : "false");
+    // Re-render both views so visibility classes settle in one place.
+    renderChartAndPeaks();
+    renderEvents();
+  }
+
+  function renderChartAndPeaks() {
+    // The chart and peak cards are two separate top-level sections; both must be
+    // hidden together when View A is active so View B truly disappears.
+    const section = $("chart-section");
+    const peaks = $("peaks");
+    if (currentView !== "detail" || !state.readings.length) {
+      section.classList.add("hidden");
+      peaks.classList.add("hidden");
+      return;
+    }
+    section.classList.remove("hidden");
+    drawChart();
+    renderPeaks();
+  }
+
   // ----- Render orchestrator -----------------------------------------------------------
   function render() {
     renderHeader();
     renderSetupNote();
-    const section = $("chart-section");
-    if (state.readings.length) {
-      section.classList.remove("hidden");
-      drawChart();
-    } else {
-      section.classList.add("hidden");
-    }
-    renderPeaks();
+    // Show the view toggle only when we actually have a forecast to show.
+    const toggle = $("view-toggle");
+    if (state.readings.length) toggle.classList.remove("hidden");
+    else toggle.classList.add("hidden");
+    renderChartAndPeaks();
+    renderEvents();
   }
 
   // ----- Settings dialog ---------------------------------------------------------------
+  // The settings dialog edits a `draft` copy of prefs; values are only committed when
+  // the user clicks Save. Cancel discards the draft entirely.
   function openSettings() {
-    draft = { location: state.prefs.location };
+    draft = {
+      location: state.prefs.location,
+      // Deep-ish copy so editing the draft never mutates state.prefs.events.
+      events: ((state.prefs && state.prefs.events) || []).map((e) => ({ ...e })),
+    };
     $("cfg-location").value = draft.location;
+    renderEventsEditor();
     $("settings-overlay").classList.remove("hidden");
     $("cfg-location").focus();
   }
@@ -631,39 +881,126 @@
   async function saveSettings() {
     if (!draft) return closeSettings();
     draft.location = $("cfg-location").value.trim().slice(0, 120);
+    // Pull the latest editor values into the draft just before saving so the user
+    // doesn't have to defocus a field to commit it.
+    captureEventsFromEditor();
     try {
-      const res = await fetch(withSfi("./api/save"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert("Couldn't save: " + (err.error || res.status));
-        return;
-      }
+      await frame.api("api/save", { location: draft.location, events: draft.events });
       closeSettings();
       await loadState();
     } catch (e) {
-      alert("Couldn't save: " + (e && e.message ? e.message : String(e)));
+      await frame.alert("Couldn't save: " + (e?.body || e?.message || String(e)));
+    }
+  }
+
+  // ----- Events editor (inside settings dialog) ----------------------------------------
+  function eventRowHtml(ev) {
+    const dowOpts = DOW_LONG.map((label, idx) =>
+      '<option value="' + idx + '"' + (idx === ev.day_of_week ? ' selected' : '') + '>' + label + '</option>'
+    ).join("");
+    const startStr = String(ev.start_hh).padStart(2, "0") + ":" + String(ev.start_mm).padStart(2, "0");
+    const endStr = String(ev.end_hh).padStart(2, "0") + ":" + String(ev.end_mm).padStart(2, "0");
+    return (
+      '<div class="event-row" data-event-id="' + escapeHTML(ev.id) + '">' +
+        '<input class="ev-name" type="text" maxlength="100" placeholder="Event name" value="' + escapeHTML(ev.name) + '">' +
+        '<select class="ev-dow" aria-label="Day of week">' + dowOpts + '</select>' +
+        '<input class="ev-start" type="time" value="' + startStr + '" aria-label="Start time">' +
+        '<span class="ev-arrow">→</span>' +
+        '<input class="ev-end" type="time" value="' + endStr + '" aria-label="End time">' +
+        '<button class="ev-del ghost" type="button" aria-label="Remove event" title="Remove">' +
+          '<i class="ph-light ph-x icon-sm"></i>' +
+        '</button>' +
+      '</div>'
+    );
+  }
+
+  function renderEventsEditor() {
+    const root = $("cfg-events");
+    if (!draft) { root.innerHTML = ""; return; }
+    root.innerHTML = draft.events.map(eventRowHtml).join("");
+    // Wire delete buttons per row. We don't wire input changes — we capture the DOM
+    // state once on save (see captureEventsFromEditor) rather than ferry every
+    // keystroke into the draft, which keeps the editor responsive and avoids
+    // re-render flicker.
+    root.querySelectorAll(".ev-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".event-row");
+        const id = row && row.getAttribute("data-event-id");
+        if (!id) return;
+        // Capture current values BEFORE removing so unrelated edits aren't lost.
+        captureEventsFromEditor();
+        draft.events = draft.events.filter((e) => e.id !== id);
+        renderEventsEditor();
+      });
+    });
+  }
+
+  function parseTimeStr(s) {
+    // "HH:MM" → { hh, mm }. Invalid input collapses to 0:00.
+    const m = String(s || "").match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return { hh: 0, mm: 0 };
+    const hh = Math.max(0, Math.min(23, parseInt(m[1], 10)));
+    const mm = Math.max(0, Math.min(59, parseInt(m[2], 10)));
+    return { hh, mm };
+  }
+
+  function captureEventsFromEditor() {
+    if (!draft) return;
+    const rows = $("cfg-events").querySelectorAll(".event-row");
+    const next = [];
+    rows.forEach((row) => {
+      const id = row.getAttribute("data-event-id");
+      const existing = draft.events.find((e) => e.id === id);
+      if (!existing) return;
+      const name = row.querySelector(".ev-name").value.trim().slice(0, 100);
+      const dow = Math.max(0, Math.min(6, parseInt(row.querySelector(".ev-dow").value, 10) || 0));
+      const start = parseTimeStr(row.querySelector(".ev-start").value);
+      const end = parseTimeStr(row.querySelector(".ev-end").value);
+      next.push({
+        ...existing,
+        name,
+        day_of_week: dow,
+        start_hh: start.hh, start_mm: start.mm,
+        end_hh: end.hh, end_mm: end.mm,
+      });
+    });
+    draft.events = next;
+  }
+
+  function addNewEvent() {
+    if (!draft) return;
+    captureEventsFromEditor();
+    // Sensible default: next Saturday 10:00–14:00. Saturdays are the typical
+    // outdoor-market day in this frame's domain.
+    const newEv = {
+      id: "ev_" + Date.now() + "_" + Math.floor(Math.random() * 1e6),
+      name: "",
+      day_of_week: 6,
+      start_hh: 10, start_mm: 0,
+      end_hh: 14, end_mm: 0,
+    };
+    draft.events.push(newEv);
+    renderEventsEditor();
+    // Focus the name field of the new row so the user can start typing immediately.
+    const rows = $("cfg-events").querySelectorAll(".event-row");
+    const last = rows[rows.length - 1];
+    if (last) {
+      const input = last.querySelector(".ev-name");
+      if (input) input.focus();
     }
   }
 
   // ----- Bootstrap + push --------------------------------------------------------------
   async function loadState() {
     try {
-      const res = await fetch(withSfi("./api/state"));
-      if (!res.ok) {
-        if (res.status === 403) {
-          document.body.innerHTML =
-            '<div class="note"><i class="ph-light ph-lock-simple icon-sm"></i> Forbidden.</div>';
-          return;
-        }
-        throw new Error("state failed: " + res.status);
-      }
-      state = await res.json();
+      state = await frame.api("api/state");
       render();
     } catch (e) {
+      if (e?.status === 403) {
+        document.body.innerHTML =
+          '<div class="note"><i class="ph-light ph-lock-simple icon-sm"></i> Forbidden.</div>';
+        return;
+      }
       console.error(e);
     }
   }
@@ -675,13 +1012,16 @@
   $("settings-overlay").addEventListener("click", (e) => {
     if (e.target === $("settings-overlay")) closeSettings();
   });
+  $("cfg-event-add").addEventListener("click", addNewEvent);
+  $("view-events-btn").addEventListener("click", () => setView("events"));
+  $("view-detail-btn").addEventListener("click", () => setView("detail"));
 
   window.addEventListener("message", (e) => {
     if (e.data && e.data.type === "settings_changed") loadState();
   });
 
   window.addEventListener("resize", () => {
-    if (state.readings.length) drawChart();
+    if (state.readings.length && currentView === "detail") drawChart();
   });
 
   attachChartInteraction();

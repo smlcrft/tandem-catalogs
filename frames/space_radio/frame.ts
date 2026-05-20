@@ -228,10 +228,12 @@ self.onNetworkRequest = async (replyPort, reqPath, method, _headers, query, body
   // UI shell — served to everyone. Non-members render a private-frame notice client-side
   // after /api/state returns 403, matching the pattern other private frames use.
   if (reqPath === "/index.html" && method === "GET") {
+    // The script is a separate ES module file so it can import /lib/js/framelib.js —
+    // inlineJs would flatten the <script type="module"> to a non-module <script>,
+    // which can't use ES module imports, so it's intentionally omitted here.
     return serveHtmlShell(replyPort, new URL("./public/index.html", import.meta.url), {
       peer,
       inlineCss: ["index.css"],
-      inlineJs: ["index.js"],
     });
   }
 

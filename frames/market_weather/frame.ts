@@ -34,16 +34,55 @@ import {
 } from "@frame-core";
 
 // ----- Per-placement preferences (single JSON file) -------------------------------------
-type Prefs = { location: string };
-const DEFAULT_PREFS: Prefs = { location: "" };
+// A WeeklyEvent is a recurring window (one day-of-week + a start→end time) for which
+// View A computes turnout stats whenever the next occurrence falls inside the 72-hour
+// forecast horizon. Names are user-given (e.g., "Baking Day").
+type WeeklyEvent = {
+  id: string;
+  name: string;
+  day_of_week: number;  // 0=Sun … 6=Sat
+  start_hh: number;     // 0..23
+  start_mm: number;     // 0..59
+  end_hh: number;       // 0..23
+  end_mm: number;       // 0..59
+};
+type Prefs = { location: string; events: WeeklyEvent[] };
+const DEFAULT_PREFS: Prefs = { location: "", events: [] };
 
 const allPrefs: Record<string, Prefs> = loadJsonFile(
   import.meta.url, "prefs.json", {} as Record<string, Prefs>,
 );
 
+function sanitizeEvent(v: unknown): WeeklyEvent | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  const clamp = (n: unknown, lo: number, hi: number): number => {
+    const x = Math.floor(Number(n));
+    if (!Number.isFinite(x)) return lo;
+    return Math.max(lo, Math.min(hi, x));
+  };
+  const name = sanitizeText(r.name, 100);
+  const day_of_week = clamp(r.day_of_week, 0, 6);
+  const start_hh = clamp(r.start_hh, 0, 23);
+  const start_mm = clamp(r.start_mm, 0, 59);
+  const end_hh = clamp(r.end_hh, 0, 23);
+  const end_mm = clamp(r.end_mm, 0, 59);
+  // Stable id; if missing or malformed, generate one. We avoid relying on the client
+  // to provide a globally-unique id — frame.ts is the source of truth here.
+  const id = typeof r.id === "string" && r.id.length > 0 && r.id.length < 64
+    ? sanitizeText(r.id, 64) : `ev_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  return { id, name, day_of_week, start_hh, start_mm, end_hh, end_mm };
+}
+
 function getPrefs(sfi_id: string): Prefs {
   const stored = allPrefs[sfi_id] ?? {} as Partial<Prefs>;
-  return { location: typeof stored.location === "string" ? stored.location : DEFAULT_PREFS.location };
+  const events = Array.isArray(stored.events)
+    ? (stored.events.map(sanitizeEvent).filter((e): e is WeeklyEvent => e !== null))
+    : [];
+  return {
+    location: typeof stored.location === "string" ? stored.location : DEFAULT_PREFS.location,
+    events,
+  };
 }
 
 function setPrefs(sfi_id: string, next: Prefs): void {
@@ -378,10 +417,12 @@ self.onNetworkRequest = async (replyPort, reqPath, method, _h, query, body, cook
   const isOwner = peer.is_owner === "1";
 
   if (reqPath === "/index.html" && method === "GET") {
+    // The script is a separate ES module file so it can import /lib/js/framelib.js —
+    // inlineJs would flatten the <script type="module"> to a non-module <script>,
+    // which can't use ES module imports, so it's intentionally omitted here.
     return serveHtmlShell(replyPort, new URL("./public/index.html", import.meta.url), {
       peer,
       inlineCss: ["index.css"],
-      inlineJs: ["index.js"],
     });
   }
 
@@ -406,9 +447,17 @@ self.onNetworkRequest = async (replyPort, reqPath, method, _h, query, body, cook
   }
 
   if (reqPath === "/api/save" && method === "POST") {
-    const v = parseJsonBody<{ location?: unknown }>(body);
+    const v = parseJsonBody<{ location?: unknown; events?: unknown }>(body);
     if (!v) return jsonReply(replyPort, 400, { error: "invalid JSON" });
-    const next: Prefs = { location: sanitizeText(v.location, 120) };
+    // Events: drop anything that doesn't sanitize cleanly, cap the list at 32 so a
+    // misbehaving / pasted-in payload can't blow up the prefs JSON.
+    const events: WeeklyEvent[] = Array.isArray(v.events)
+      ? (v.events.map(sanitizeEvent).filter((e): e is WeeklyEvent => e !== null).slice(0, 32))
+      : [];
+    const next: Prefs = {
+      location: sanitizeText(v.location, 120),
+      events,
+    };
     setPrefs(peer.sfi_id, next);
     pushToInstance(peer.sfi_id, { type: "settings_changed" });
     return jsonReply(replyPort, 200, { prefs: next });

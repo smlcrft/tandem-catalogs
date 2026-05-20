@@ -503,10 +503,12 @@ self.onNetworkRequest = async (replyPort, reqPath, method, _h, query, body, cook
   const isOwner = peer.is_owner === "1";
 
   if (reqPath === "/index.html" && method === "GET") {
+    // The script is a separate ES module file so it can import /lib/js/framelib.js —
+    // inlineJs would flatten the <script type="module"> to a non-module <script>,
+    // which can't use ES module imports, so it's intentionally omitted here.
     return serveHtmlShell(replyPort, new URL("./public/index.html", import.meta.url), {
       peer,
       inlineCss: ["index.css"],
-      inlineJs: ["index.js"],
     });
   }
 

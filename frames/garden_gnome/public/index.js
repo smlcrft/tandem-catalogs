@@ -1,9 +1,8 @@
+import { frame } from "/lib/js/framelib.js";
+
 (function () {
   const peer = window.__peer || {};
   const isAnon = peer.is_anon === "1" || !peer.user_id;
-
-  const urlSfi = new URLSearchParams(location.search).get("sfi") || "";
-  const withSfi = (u) => !urlSfi ? u : u + (u.includes("?") ? "&" : "?") + "sfi=" + encodeURIComponent(urlSfi);
 
   const $ = (id) => document.getElementById(id);
 
@@ -258,38 +257,25 @@
     if (!draft) return closeSettings();
     draft.location = $("cfg-location").value.trim().slice(0, 120);
     try {
-      const res = await fetch(withSfi("./api/save"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert("Couldn't save: " + (err.error || res.status));
-        return;
-      }
+      await frame.api("api/save", draft);
       closeSettings();
       await loadState();
     } catch (e) {
-      alert("Couldn't save: " + (e && e.message ? e.message : String(e)));
+      await frame.alert("Couldn't save: " + (e?.body || e?.message || String(e)));
     }
   }
 
   // ----- Bootstrap + push --------------------------------------------------------------
   async function loadState() {
     try {
-      const res = await fetch(withSfi("./api/state"));
-      if (!res.ok) {
-        if (res.status === 403) {
-          document.body.innerHTML =
-            '<div class="note"><i class="ph-light ph-lock-simple icon-sm"></i> Forbidden.</div>';
-          return;
-        }
-        throw new Error("state failed: " + res.status);
-      }
-      state = await res.json();
+      state = await frame.api("api/state");
       render();
     } catch (e) {
+      if (e?.status === 403) {
+        document.body.innerHTML =
+          '<div class="note"><i class="ph-light ph-lock-simple icon-sm"></i> Forbidden.</div>';
+        return;
+      }
       console.error(e);
     }
   }
