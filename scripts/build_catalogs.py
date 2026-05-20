@@ -39,14 +39,14 @@ BASE_URL = "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main"
 
 # Catalog-level metadata (the wrapper around the items list).
 CATALOG_FRAMES = {
-    "catalog_id":  "smlcrft_frames",
-    "name":        "Smlcrft Frames",
-    "description": "Community frames published by smlcrft.",
+    "catalog_id":  "smallcraft_frames",
+    "name":        "Small Craft Frames",
+    "description": "Community frames published by Small Craft.",
 }
 CATALOG_CAPS = {
-    "catalog_id":  "smlcrft_capabilities",
-    "name":        "Smlcrft Capabilities",
-    "description": "Community capabilities published by smlcrft.",
+    "catalog_id":  "smallcraft_capabilities",
+    "name":        "Small Craft Capabilities",
+    "description": "Community capabilities published by Small Craft.",
 }
 
 # Path-components to drop from frame tarballs. `data/` is per-host runtime

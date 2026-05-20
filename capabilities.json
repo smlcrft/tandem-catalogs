@@ -1,7 +1,7 @@
 {
-  "catalog_id": "smlcrft_capabilities",
-  "name": "Smlcrft Capabilities",
-  "description": "Community capabilities published by smlcrft.",
+  "catalog_id": "smallcraft_capabilities",
+  "name": "Small Craft Capabilities",
+  "description": "Community capabilities published by Small Craft.",
   "kind": "Capabilities",
   "items": [
     {
@@ -10,7 +10,7 @@
       "name": "openai",
       "description": "OpenAI API \u2014 GPT chat completions and text generation",
       "icon": "",
-      "modified_at": "2026-05-20T15:32:41Z",
+      "modified_at": "2026-05-20T15:53:08Z",
       "frame_preview": null,
       "capability_preview": {
         "kind": "service",
