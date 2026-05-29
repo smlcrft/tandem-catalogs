@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASCII Runner</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+  <div id="game-container">
+    <div id="hud">
+      <div id="score-display">SCORE: <span id="score">0</span></div>
+      <div id="health-display">LIVES: <span id="health">❤️❤️❤️</span></div>
+      <div id="speed-display">SPEED: <span id="speed">1</span></div>
+    </div>
+
+    <div id="game-area">
+      <div id="sky-layer"></div>
+      <div id="game-world">
+        <div id="ground-decorations"></div>
+        <div id="obstacle-layer"></div>
+        <div id="player-container">
+          <div id="player" class="running">
+            <div class="player-sprite">🏃</div>
+          </div>
+        </div>
+      </div>
+      <div id="ground-line">▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓</div>
+    </div>
+
+    <div id="controls-hint">
+      <span class="key">↑</span> JUMP   <span class="key">↓</span> DUCK
+    </div>
+
+    <div id="game-over" class="hidden">
+      <div id="game-over-content">
+        <h1>GAME OVER</h1>
+        <p id="final-score">Final Score: 0</p>
+        <p id="high-score-display">High Score: 0</p>
+        <button id="restart-btn">▶ PLAY AGAIN</button>
+      </div>
+    </div>
+
+    <div id="start-screen">
+      <div id="start-content">
+        <h1>🎮 ASCII RUNNER 🎮</h1>
+        <p class="instructions">Jump over 🪨 rocks and duck under 🦅 birds!</p>
+        <p class="instructions">The game gets faster as you progress...</p>
+        <button id="start-btn">▶ START GAME</button>
+        <p class="high-score-start" id="high-score-start"></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ASCII Runner Game Logic — pure imperative DOM, no network calls.
+    // (No framelib import needed: this frame doesn't talk to its backend.)
+
+    const gameWorld = document.getElementById('game-world');
+    const player = document.getElementById('player');
+    const obstacleLayer = document.getElementById('obstacle-layer');
+    const groundDecorations = document.getElementById('ground-decorations');
+    const scoreDisplay = document.getElementById('score');
+    const healthDisplay = document.getElementById('health');
+    const speedDisplay = document.getElementById('speed');
+    const gameOverScreen = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('final-score');
+    const startScreen = document.getElementById('start-screen');
+    const startBtn = document.getElementById('start-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    const highScoreDisplay = document.getElementById('high-score-display');
+    const highScoreStart = document.getElementById('high-score-start');
+
+    let gameState = {
+      isRunning: false,
+      score: 0,
+      health: 3,
+      speed: 1,
+      playerY: 0,
+      isJumping: false,
+      isDucking: false,
+      obstacles: [],
+      lastObstacleTime: 0,
+      obstacleInterval: 2000,
+      groundOffset: 0,
+      animationFrame: null,
+      lastTime: 0,
+      highScore: parseInt(localStorage.getItem('asciiRunnerHighScore') || '0'),
+    };
+
+    const GRAVITY = 0.8;
+    const JUMP_FORCE = -15;
+    const GROUND_Y = 0;
+    const DUCK_HEIGHT = 20;
+    const PLAYER_NORMAL_HEIGHT = 50;
+    const PLAYER_WIDTH = 40;
+    const WORLD_WIDTH = 700;
+
+    if (gameState.highScore > 0) {
+      highScoreStart.textContent = `High Score: ${gameState.highScore}`;
+    }
+
+    function initGroundDecorations() {
+      groundDecorations.innerHTML = '';
+      const decorations = ['🌱', '🌿', '🌾', '🍄', '🥀', '🌱', '🌿'];
+      for (let i = 0; i < 20; i++) {
+        const dec = document.createElement('div');
+        dec.className = 'ground-dec';
+        dec.textContent = decorations[Math.floor(Math.random() * decorations.length)];
+        dec.style.left = `${i * 40 + Math.random() * 20}px`;
+        dec.style.bottom = `${Math.random() * 5}px`;
+        groundDecorations.appendChild(dec);
+      }
+    }
+
+    let playerVelocity = 0;
+
+    function updatePlayer() {
+      if (gameState.isJumping) {
+        playerVelocity += GRAVITY;
+        gameState.playerY -= playerVelocity;
+
+        if (gameState.playerY <= GROUND_Y) {
+          gameState.playerY = GROUND_Y;
+          gameState.isJumping = false;
+          playerVelocity = 0;
+          player.classList.remove('jumping');
+          player.classList.add('running');
+        }
+
+        player.style.bottom = `${gameState.playerY}px`;
+      }
+
+      if (gameState.isDucking) {
+        player.classList.add('ducking');
+        player.classList.remove('running');
+        player.querySelector('.player-sprite').textContent = '🧎';
+      } else if (!gameState.isJumping) {
+        player.classList.remove('ducking');
+        player.classList.add('running');
+        player.querySelector('.player-sprite').textContent = '🏃';
+      }
+    }
+
+    function jump() {
+      if (!gameState.isJumping && !gameState.isDucking && gameState.isRunning) {
+        gameState.isJumping = true;
+        playerVelocity = JUMP_FORCE;
+        player.classList.add('jumping');
+        player.classList.remove('running');
+        playSound('jump');
+      }
+    }
+
+    function duck(isDucking) {
+      if (!gameState.isJumping && gameState.isRunning) {
+        gameState.isDucking = isDucking;
+      }
+    }
+
+    const obstacleTypes = [
+      { type: 'rock', emoji: '🪨', width: 30, height: 30, y: 0, requiresJump: true },
+      { type: 'rock2', emoji: '🪨', width: 35, height: 35, y: 0, requiresJump: true },
+      { type: 'bird', emoji: '🦅', width: 40, height: 30, y: 50, requiresDuck: true },
+      { type: 'bird2', emoji: '🦆', width: 35, height: 25, y: 55, requiresDuck: true },
+      { type: 'cactus', emoji: '🌵', width: 25, height: 40, y: 0, requiresJump: true },
+    ];
+
+    function spawnObstacle() {
+      const now = Date.now();
+      const adjustedInterval = gameState.obstacleInterval / (1 + gameState.speed * 0.1);
+
+      if (now - gameState.lastObstacleTime < adjustedInterval) return;
+
+      let availableTypes = obstacleTypes.slice(0, 2);
+      if (gameState.speed > 2) availableTypes = obstacleTypes.slice(0, 4);
+      if (gameState.speed > 5) availableTypes = obstacleTypes;
+
+      const obstacleData = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+
+      const obstacle = document.createElement('div');
+      obstacle.className = `obstacle ${obstacleData.type}`;
+      obstacle.textContent = obstacleData.emoji;
+      obstacle.style.right = '-50px';
+      obstacle.style.bottom = `${obstacleData.y}px`;
+
+      const obstacleObj = {
+        element: obstacle,
+        x: WORLD_WIDTH + 50,
+        width: obstacleData.width,
+        height: obstacleData.height,
+        y: obstacleData.y,
+        requiresJump: obstacleData.requiresJump,
+        requiresDuck: obstacleData.requiresDuck,
+        passed: false,
+      };
+
+      obstacleLayer.appendChild(obstacle);
+      gameState.obstacles.push(obstacleObj);
+      gameState.lastObstacleTime = now;
+    }
+
+    function updateObstacles() {
+      const speed = 3 + gameState.speed * 0.5;
+
+      gameState.obstacles = gameState.obstacles.filter((obs) => {
+        obs.x -= speed;
+        obs.element.style.right = `${WORLD_WIDTH - obs.x}px`;
+
+        if (!obs.passed && obs.x < 50) {
+          obs.passed = true;
+          gameState.score += Math.floor(10 * gameState.speed);
+          updateScore();
+          playSound('score');
+
+          if (gameState.score % 50 === 0 && gameState.speed < 10) {
+            gameState.speed += 0.5;
+            updateSpeed();
+          }
+        }
+
+        if (obs.x < -50) {
+          obs.element.remove();
+          return false;
+        }
+
+        if (checkCollision(obs)) {
+          handleCollision();
+          return false;
+        }
+
+        return true;
+      });
+    }
+
+    function checkCollision(obs) {
+      const playerLeft = 30;
+      const playerRight = playerLeft + PLAYER_WIDTH;
+      const playerBottom = gameState.playerY;
+      const playerTop = gameState.isDucking
+        ? playerBottom + DUCK_HEIGHT
+        : (gameState.isJumping ? playerBottom + PLAYER_NORMAL_HEIGHT : playerBottom + PLAYER_NORMAL_HEIGHT);
+
+      const obsLeft = obs.x - obs.width / 2;
+      const obsRight = obs.x + obs.width / 2;
+      const obsBottom = obs.y;
+      const obsTop = obs.y + obs.height;
+
+      if (playerRight > obsLeft && playerLeft < obsRight) {
+        if (obs.requiresJump && playerBottom < obsTop && playerTop > obsBottom) {
+          if (playerBottom < 5) return false;
+          return true;
+        }
+        if (obs.requiresDuck && playerTop > obsBottom) {
+          if (gameState.isDucking && playerTop < obsBottom + 20) return false;
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function handleCollision() {
+      gameState.health--;
+      updateHealth();
+      playSound('hit');
+
+      player.classList.add('hit');
+      setTimeout(() => player.classList.remove('hit'), 200);
+
+      if (gameState.health <= 0) gameOver();
+    }
+
+    function updateScore() { scoreDisplay.textContent = gameState.score; }
+
+    function updateHealth() {
+      const hearts = '❤️'.repeat(Math.max(0, gameState.health)) + '🖤'.repeat(Math.max(0, 3 - gameState.health));
+      healthDisplay.textContent = hearts;
+    }
+
+    function updateSpeed() { speedDisplay.textContent = gameState.speed.toFixed(1); }
+
+    function playSound() {
+      const flash = document.createElement('div');
+      flash.className = 'flash-effect';
+      document.getElementById('game-area').appendChild(flash);
+      setTimeout(() => flash.remove(), 100);
+    }
+
+    function gameOver() {
+      gameState.isRunning = false;
+      cancelAnimationFrame(gameState.animationFrame);
+
+      if (gameState.score > gameState.highScore) {
+        gameState.highScore = gameState.score;
+        localStorage.setItem('asciiRunnerHighScore', gameState.highScore.toString());
+        highScoreDisplay.textContent = `🏆 NEW HIGH SCORE: ${gameState.highScore}!`;
+        highScoreDisplay.classList.add('new-record');
+      } else {
+        highScoreDisplay.textContent = `High Score: ${gameState.highScore}`;
+        highScoreDisplay.classList.remove('new-record');
+      }
+
+      finalScoreEl.textContent = `Final Score: ${gameState.score}`;
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    function startGame() {
+      gameState = {
+        ...gameState,
+        isRunning: true,
+        score: 0,
+        health: 3,
+        speed: 1,
+        playerY: 0,
+        isJumping: false,
+        isDucking: false,
+        obstacles: [],
+        lastObstacleTime: 0,
+        obstacleInterval: 2000,
+        lastTime: performance.now(),
+      };
+
+      obstacleLayer.innerHTML = '';
+
+      updateScore();
+      updateHealth();
+      updateSpeed();
+
+      startScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+
+      player.style.bottom = '0px';
+      player.classList.remove('jumping', 'ducking');
+      player.classList.add('running');
+      player.querySelector('.player-sprite').textContent = '🏃';
+
+      playerVelocity = 0;
+
+      initGroundDecorations();
+      gameLoop(performance.now());
+    }
+
+    function gameLoop(timestamp) {
+      if (!gameState.isRunning) return;
+
+      gameState.lastTime = timestamp;
+
+      updatePlayer();
+      spawnObstacle();
+      updateObstacles();
+
+      gameState.groundOffset += 3 + gameState.speed * 0.5;
+
+      gameState.animationFrame = requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
+        e.preventDefault();
+        if (!gameState.isRunning && startScreen.classList.contains('hidden') && gameOverScreen.classList.contains('hidden')) return;
+        if (!gameState.isRunning && !startScreen.classList.contains('hidden')) {
+          startGame();
+          return;
+        }
+        jump();
+      }
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        duck(true);
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') duck(false);
+    });
+
+    document.getElementById('game-area').addEventListener('touchstart', (e) => {
+      const touchY = e.touches[0].clientY;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeY = touchY - rect.top;
+      if (relativeY < rect.height / 2) jump();
+      else duck(true);
+    });
+
+    document.getElementById('game-area').addEventListener('touchend', () => duck(false));
+
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    initGroundDecorations();
+  </script>
+</body>
+</html>

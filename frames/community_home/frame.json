@@ -1,0 +1,11 @@
+{
+    "name": "Community Home",
+    "description": "A minimal website builder for a community home page. Admins configure the title, color, sections, and links; anonymous visitors see the published public page.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at": "2026-04-23 00:00:00.000000 UTC",
+    "modified_at": "2026-05-22T14:16:13Z",
+    "depends_on_capabilities": []
+}

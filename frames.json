@@ -6,6 +6,91 @@
   "items": [
     {
       "kind": "Frames",
+      "id": "community_home",
+      "name": "Community Home",
+      "description": "A minimal website builder for a community home page. Admins configure the title, color, sections, and links; anonymous visitors see the published public page.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:16:13Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/community_home.tar.gz",
+      "package_sha256": "aa8a76e7d9e28570467c7a2722c39154a34cba060255a89d1ba77ab88457f311"
+    },
+    {
+      "kind": "Frames",
+      "id": "community_library",
+      "name": "Community Library",
+      "description": "Track items shared by a community \u2014 books, tools, gear \u2014 and who has them checked out. Items and members live in shared SyncTables (the members table is compatible with Member Manager so the same roster can be reused). Per-placement preferences (org name, borrow durations, owner-only edit) are stored in a local JSON file.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:16:13Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/community_library.tar.gz",
+      "package_sha256": "1b6ff90d3471054c9f155a0de2acb7dadc7b9fb0858c879cd3790ad1aea40ace"
+    },
+    {
+      "kind": "Frames",
+      "id": "discussion_channel",
+      "name": "Discussion Channel",
+      "description": "A per-placement realtime chat channel for known users in the space. Any signed-in member can rename the channel, pick a theme, post messages, and react with Phosphor Light icons. Anonymous viewers see a private-channel notice.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:16:13Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/discussion_channel.tar.gz",
+      "package_sha256": "f45e14d89572a622b12cafbc7679eb24451d3dbce82b3fa009c87ce96c31750c"
+    },
+    {
+      "kind": "Frames",
+      "id": "game_ascii_runner",
+      "name": "ASCII Runner",
+      "description": "A retro side-scrolling ASCII game where you jump over rocks and duck under birds. Use arrow keys to survive as long as you can!",
+      "icon": "",
+      "modified_at": "2026-05-20T18:43:14Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_ascii_runner.tar.gz",
+      "package_sha256": "031b4687225789cbc1b7c50b37b49cd112173e8c002c084b52951dda97dbd22c"
+    },
+    {
+      "kind": "Frames",
+      "id": "game_dice_roller",
+      "name": "Dice Roller",
+      "description": "Simple dice roller. Roll via the UI or HTTP API; result is broadcast to all viewers of a frame instance.",
+      "icon": "",
+      "modified_at": "2026-05-20T18:43:14Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_dice_roller.tar.gz",
+      "package_sha256": "cedcdde60e88b0f8de988f6bb785add6b438399fde57d7e8f3d1918c9317dea3"
+    },
+    {
+      "kind": "Frames",
       "id": "game_pancake_stacker",
       "name": "Pancake Stacker",
       "description": "Simple solo arcade game. A pancake swings back and forth at the top of the griddle \u2014 tap, click, or hit space to drop it onto the stack. Each pancake trims to the overlap with the one below, so the tower narrows as you climb. Miss entirely and the stack topples. High score per placement.",
@@ -40,6 +125,23 @@
     },
     {
       "kind": "Frames",
+      "id": "help_desk",
+      "name": "Help Desk",
+      "description": "Anonymous visitors submit a message with email (plus admin-configured fields); known users in the space see a realtime inbox of incoming correspondence.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:16:13Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/help_desk.tar.gz",
+      "package_sha256": "af044ce3ab0cd0359d2d86bf22522921aac054fc1e7bba273668804b3e2022d6"
+    },
+    {
+      "kind": "Frames",
       "id": "market_weather",
       "name": "Market Weather",
       "description": "A turnout forecaster for outdoor commerce \u2014 farmers markets, festivals, food trucks, street vendors, walkable storefronts. Set a location and Market Weather pulls 72 hours of weather from Open-Meteo (keyless), compares it against the last 30 days' local norms, and folds in temperature comfort, rain, UV, daylight, wind, weekend bonus, and time-of-day into a single composite turnout curve. The graph overlays each contributing factor as a faint band (daytime in pale yellow, rain in blue rising from the bottom, extreme heat/cold in red, weekend bonus in green) so you can see at a glance WHY the bold turnout line moves the way it does \u2014 and plan how much to stock, bake, or brew for the days ahead.",
@@ -57,6 +159,40 @@
     },
     {
       "kind": "Frames",
+      "id": "member_manager",
+      "name": "Member Manager",
+      "description": "View and manage a roster of people and their roles within an organization. Member entries are stored in a shared SyncTable so every space member sees the same list. Per-placement preferences (org name, available roles, edit policy) are stored in a local JSON file.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:16:13Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_manager.tar.gz",
+      "package_sha256": "bc727d88d8d11a2119e375f5e4571dd296d63c286274131e203296b0db8d3f3e"
+    },
+    {
+      "kind": "Frames",
+      "id": "roundtable",
+      "name": "Roundtable",
+      "description": "A per-placement private discussion + two prioritized idea boards for known space members. Members chat in a single channel, add items to a Positives list (features/tasks) or a Negatives list (issues/bugs), and +1 the ones that matter. Items are ranked by votes, then recency. Only the owner can rename the frame and set high-level preferences. Anonymous viewers see a private-frame notice.",
+      "icon": "",
+      "modified_at": "2026-05-22T14:31:08Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/roundtable.tar.gz",
+      "package_sha256": "219de662b96ce4175be1d0d96e7c317ad25222e893c7f2fff13e604fd3e1793a"
+    },
+    {
+      "kind": "Frames",
       "id": "space_radio",
       "name": "Space Radio",
       "description": "A synced web radio player for everyone in a space. Any space member can pick a station from a large list of public web stations \u2014 rock, pop, ambient, jazz, French, Italian, Australian, NPR, chiptune, and more \u2014 and everyone else in the space hears the same audio simultaneously. Play/pause and station selection are shared; each viewer's volume and mute are local and remembered between sessions.",
@@ -71,6 +207,23 @@
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/space_radio.tar.gz",
       "package_sha256": "4ecc1248aac2db4ba12b8428fdd90b0ac441effa12575230082faab14c664c13"
+    },
+    {
+      "kind": "Frames",
+      "id": "weather_api",
+      "name": "Weather Info",
+      "description": "Example weather info/forecast using keyless API (open meteo)",
+      "icon": "",
+      "modified_at": "2026-05-20T18:43:14Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/weather_api.tar.gz",
+      "package_sha256": "8a949a6bec5e8e65e1add8ab8f6291b6338ea51cf8c124eb7130dba489adf46a"
     }
   ]
 }

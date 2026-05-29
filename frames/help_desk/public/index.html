@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help Desk</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+  <main id="app" class="hd-root"></main>
+  <script type="module">
+import { frame, html, render, useState, useEffect, useRef, Fragment, useFramePush } from "/lib/js/framelib.js";
+
+const peer = window.__peer || {};
+const urlSfi = new URLSearchParams(location.search).get("sfi") || "";
+const me = {
+  is_anon: peer.is_anon || !peer.user_id,
+  sfi_id: peer.sfi_id || urlSfi || "",
+  user_name: peer.user_name || "",
+};
+const api = frame.api;
+
+function formatRelative(ts) {
+  const diff = Math.max(0, Date.now() - ts);
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+// =====================================================================================
+// Anonymous submit form
+// =====================================================================================
+function AnonForm() {
+  const [fields, setFields] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [values, setValues] = useState({});
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sentTo, setSentTo] = useState(null);
+
+  useEffect(() => {
+    api("./api/config").then((r) => { setFields(r.fields || []); setLoaded(true); }).catch(() => setLoaded(true));
+  }, []);
+
+  const onChange = (fid, v) => setValues((prev) => ({ ...prev, [fid]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setSubmitting(true);
+    try {
+      await api("./api/submit", { email: email.trim(), fields: values });
+      setSentTo(email.trim());
+    } catch (e2) {
+      setErr(e2.message || String(e2));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reset = () => {
+    setSentTo(null);
+    setEmail("");
+    setValues({});
+    setErr("");
+  };
+
+  if (!loaded) return html`<div class="hd-loading center">loading…</div>`;
+
+  if (sentTo) {
+    return html`<section class="hd-anon">
+      <div class="hd-success">
+        <i class="ph-light ph-check-circle icon-md"></i>
+        <div>
+          <div style="font-weight: var(--os-weight-semibold);">Message sent</div>
+          <div class="muted" style="font-size: var(--os-fs-sm);">We'll reach out at ${sentTo}.</div>
+        </div>
+      </div>
+      <div class="row" style="justify-content: center; margin-top: var(--os-sp-xl);">
+        <button class="ghost" onClick=${reset}><i class="ph-light ph-arrow-left icon-sm"></i> Send another</button>
+      </div>
+    </section>`;
+  }
+
+  return html`<section class="hd-anon">
+    <h1>Send us a message</h1>
+    <p class="hd-subtitle muted">We'll get back to you at the email you provide.</p>
+    <form class="stack" onSubmit=${submit}>
+      ${err && html`<div class="hd-error">${err}</div>`}
+      <div class="hd-field">
+        <label for="hd-email">Email <span class="req">*</span></label>
+        <input id="hd-email" type="email" required autocomplete="email" placeholder="you@example.com"
+          value=${email} onInput=${(e) => setEmail(e.target.value)} />
+      </div>
+      ${fields.map((f) => html`<${CustomFieldInput} key=${f.id} field=${f} value=${values[f.id]} onChange=${(v) => onChange(f.id, v)} />`)}
+      <div class="row" style="justify-content: flex-end; gap: var(--os-sp-sm);">
+        <button type="submit" disabled=${submitting}>
+          <i class="ph-light ph-paper-plane-tilt icon-sm"></i> Send
+        </button>
+      </div>
+    </form>
+  </section>`;
+}
+
+function CustomFieldInput({ field: f, value, onChange }) {
+  const req = f.required ? html`<span class="req">*</span>` : null;
+  if (f.type === "checkbox") {
+    return html`<div class="hd-field inline">
+      <input id=${"hd-f-" + f.id} type="checkbox" required=${f.required}
+        checked=${!!value} onChange=${(e) => onChange(e.target.checked)} />
+      <label for=${"hd-f-" + f.id}>${f.label} ${req}</label>
+    </div>`;
+  }
+  if (f.type === "dropdown") {
+    return html`<div class="hd-field">
+      <label for=${"hd-f-" + f.id}>${f.label} ${req}</label>
+      <select id=${"hd-f-" + f.id} required=${f.required}
+        value=${value || ""} onChange=${(e) => onChange(e.target.value)}>
+        <option value="">Select…</option>
+        ${(f.options || []).map((o) => html`<option key=${o} value=${o}>${o}</option>`)}
+      </select>
+    </div>`;
+  }
+  if (f.type === "textarea") {
+    return html`<div class="hd-field">
+      <label for=${"hd-f-" + f.id}>${f.label} ${req}</label>
+      <textarea id=${"hd-f-" + f.id} rows="5" required=${f.required}
+        value=${value || ""} onInput=${(e) => onChange(e.target.value)}></textarea>
+    </div>`;
+  }
+  return html`<div class="hd-field">
+    <label for=${"hd-f-" + f.id}>${f.label} ${req}</label>
+    <input id=${"hd-f-" + f.id} type="text" required=${f.required}
+      value=${value || ""} onInput=${(e) => onChange(e.target.value)} />
+  </div>`;
+}
+
+// =====================================================================================
+// Admin view
+// =====================================================================================
+function previewFor(s, fieldMap) {
+  const pick = (pred) => {
+    for (const [fid, v] of Object.entries(s.fields || {})) {
+      if (typeof v !== "string" || !v.trim()) continue;
+      const f = fieldMap.get(String(fid));
+      if (pred(f)) return v.trim();
+    }
+    return "";
+  };
+  return pick((f) => f && f.type === "textarea")
+    || pick((f) => f && f.type === "text")
+    || pick(() => true);
+}
+
+function Submission({ s, fields, isOpen, isHighlight, notes, onToggle, onSetStatus, onDelete, onAddNote }) {
+  const fieldMap = new Map(fields.map((f) => [String(f.id), f]));
+  const blocks = [];
+  const compact = [];
+  for (const [fid, v] of Object.entries(s.fields || {})) {
+    if (v === "" || v === undefined || v === null || v === false) continue;
+    const f = fieldMap.get(String(fid));
+    const label = f ? f.label : `#${fid}`;
+    if (f && f.type === "textarea") {
+      blocks.push(html`<div key=${fid}>
+        <div class="muted" style="font-size: var(--os-fs-xs); margin-bottom: 2px;">${label}</div>
+        <div class="hd-sub-message">${String(v)}</div>
+      </div>`);
+    } else {
+      const val = v === true ? "yes" : String(v);
+      compact.push({ fid, label, val });
+    }
+  }
+  const previewRaw = previewFor(s, fieldMap);
+  const preview = previewRaw
+    ? (previewRaw.length > 140 ? previewRaw.slice(0, 140) + "…" : previewRaw)
+    : "(no content)";
+
+  return html`<article class=${`hd-sub status-${s.status} ${isOpen ? "open" : ""} ${isHighlight ? "highlight" : ""}`} data-sub-id=${s.id}>
+    <div class="hd-sub-head" onClick=${onToggle}>
+      <span class="hd-status-pill">${s.status.replace("_", " ")}</span>
+      <span class="hd-sub-email">${s.email}</span>
+      <span class="hd-sub-time" title=${new Date(s.submitted_at).toISOString()}>${formatRelative(s.submitted_at)}</span>
+    </div>
+    <div class="hd-sub-preview" onClick=${onToggle}>${preview}</div>
+    ${isOpen && html`<div class="hd-sub-detail" onClick=${(e) => e.stopPropagation()}>
+      ${blocks.length === 0 && compact.length === 0
+        ? html`<div class="muted" style="font-size: var(--os-fs-sm);">(no additional fields submitted)</div>`
+        : html`<${Fragment}>
+            ${blocks}
+            ${compact.length > 0 && html`<dl class="hd-sub-meta">
+              ${compact.flatMap((c) => [html`<dt key=${"dt-" + c.fid}>${c.label}</dt>`, html`<dd key=${"dd-" + c.fid}>${c.val}</dd>`])}
+            </dl>`}
+          </${Fragment}>`}
+      <div class="hd-sub-actions">
+        <label style="font-size: var(--os-fs-sm); color: var(--os-text-muted);">Status</label>
+        <select value=${s.status} onChange=${(e) => onSetStatus(s.id, e.target.value)}>
+          ${["new", "in_progress", "resolved", "archived"].map((st) => html`<option key=${st} value=${st}>${st.replace("_", " ")}</option>`)}
+        </select>
+        <a class="secondary" href=${`mailto:${encodeURIComponent(s.email)}?subject=${encodeURIComponent("Re: your message")}`} role="button" style="text-decoration:none;">
+          <button class="secondary" type="button"><i class="ph-light ph-envelope-simple icon-sm"></i> Reply via email</button>
+        </a>
+        <span class="spacer" style="flex:1;"></span>
+        <button class="ghost" onClick=${() => onDelete(s.id)}><i class="ph-light ph-trash icon-sm"></i></button>
+      </div>
+      <div>
+        <div class="muted" style="font-size: var(--os-fs-xs); margin-bottom: var(--os-sp-xs);">Internal notes</div>
+        <${NotesPanel} submissionId=${s.id} notes=${notes} />
+        <${AddNoteForm} onSubmit=${(body) => onAddNote(s.id, body)} />
+      </div>
+    </div>`}
+  </article>`;
+}
+
+function NotesPanel({ submissionId, notes }) {
+  if (notes === undefined) return html`<div class="hd-notes" id=${"hd-notes-" + submissionId}>
+    <div class="muted" style="font-size: var(--os-fs-xs);">loading…</div>
+  </div>`;
+  if (notes.length === 0) return html`<div class="hd-notes" id=${"hd-notes-" + submissionId}>
+    <div class="muted" style="font-size: var(--os-fs-xs);">No notes yet.</div>
+  </div>`;
+  return html`<div class="hd-notes" id=${"hd-notes-" + submissionId}>
+    ${notes.map((n) => html`<div class="hd-note" key=${n.id}>
+      <div class="hd-note-head">
+        <span>${n.author_name || "admin"}</span>
+        <span>${formatRelative(n.created_at)}</span>
+      </div>
+      <div class="hd-note-body">${n.body}</div>
+    </div>`)}
+  </div>`;
+}
+
+function AddNoteForm({ onSubmit }) {
+  const [val, setVal] = useState("");
+  const submit = (e) => {
+    e.preventDefault();
+    const body = val.trim();
+    if (!body) return;
+    onSubmit(body);
+    setVal("");
+  };
+  return html`<form class="hd-note-form" onSubmit=${submit} style="margin-top: var(--os-sp-sm);">
+    <textarea rows="2" placeholder="Add a private note for your team…" required
+      value=${val} onInput=${(e) => setVal(e.target.value)}></textarea>
+    <div class="row" style="justify-content: flex-end;">
+      <button type="submit" class="ghost"><i class="ph-light ph-plus icon-sm"></i> add note</button>
+    </div>
+  </form>`;
+}
+
+function InboxView({ submissions, fields, openId, highlightId, notesBySub, setOpenId, onToggleNotes, ...handlers }) {
+  if (submissions.length === 0) {
+    return html`<div class="hd-inbox-empty">
+      <i class="ph-light ph-tray icon-lg"></i>
+      <p>No messages yet. When anonymous visitors submit the form, they'll show up here in realtime.</p>
+    </div>`;
+  }
+  return html`<div class="hd-inbox">
+    ${submissions.map((s) => html`<${Submission} key=${s.id} s=${s} fields=${fields}
+      isOpen=${openId === s.id}
+      isHighlight=${highlightId === s.id}
+      notes=${notesBySub.get(s.id)}
+      onToggle=${() => {
+        const next = openId === s.id ? null : s.id;
+        setOpenId(next);
+        if (next === s.id) onToggleNotes(s.id);
+      }}
+      ...${handlers}
+    />`)}
+  </div>`;
+}
+
+function FieldsView({ fields, onCreate, onSetRequired, onDelete, toast }) {
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState("text");
+  const [required, setRequired] = useState(false);
+  const [optsRaw, setOptsRaw] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const opts = type === "dropdown" ? optsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    if (type === "dropdown" && opts.length === 0) { toast("dropdown needs at least one option"); return; }
+    await onCreate({ label: label.trim(), type, required, options: opts });
+    setLabel(""); setRequired(false); setOptsRaw(""); setType("text");
+  };
+
+  return html`<div class="hd-fields">
+    <div>
+      <h2>Form Fields</h2>
+      <p class="muted">Anonymous visitors always fill in <strong>Email</strong>. The <em>Message</em> field below is included by default — remove it if another field fits better, or keep and mark required.</p>
+    </div>
+    <div class="hd-field-row fixed">
+      <span class="label">Email</span>
+      <span class="type">text</span>
+      <span class="spacer"></span>
+      <span class="required-toggle">required • default</span>
+    </div>
+    ${fields.map((f) => html`<div class="hd-field-row" key=${f.id} data-fid=${f.id}>
+      <span class="label">${f.label}</span>
+      <span class="type">${f.type}</span>
+      ${f.type === "dropdown" && html`<span class="options">options: ${(f.options || []).join(", ")}</span>`}
+      <span class="spacer"></span>
+      <label class="required-toggle">
+        <input type="checkbox" checked=${f.required} onChange=${(e) => onSetRequired(f.id, e.target.checked)} /> required
+      </label>
+      <button class="ghost" title="Remove field" onClick=${() => onDelete(f.id)}><i class="ph-light ph-trash icon-sm"></i></button>
+    </div>`)}
+    <form class="hd-add-form" onSubmit=${submit}>
+      <div class="row">
+        <input class="grow" type="text" placeholder="Field label (e.g. Phone number)" required
+          value=${label} onInput=${(e) => setLabel(e.target.value)} />
+        <select value=${type} onChange=${(e) => setType(e.target.value)}>
+          <option value="text">Text</option>
+          <option value="textarea">Textarea</option>
+          <option value="checkbox">Checkbox</option>
+          <option value="dropdown">Dropdown</option>
+        </select>
+        <label class="checkbox-lbl">
+          <input type="checkbox" checked=${required} onChange=${(e) => setRequired(e.target.checked)} /> required
+        </label>
+      </div>
+      ${type === "dropdown" && html`<div class="row">
+        <input class="grow" type="text" placeholder="Option 1, Option 2, Option 3"
+          value=${optsRaw} onInput=${(e) => setOptsRaw(e.target.value)} />
+      </div>`}
+      <div class="row" style="justify-content: flex-end;">
+        <button type="submit"><i class="ph-light ph-plus icon-sm"></i> Add field</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+function AdminView() {
+  const [tab, setTab] = useState("inbox");
+  const [submissions, setSubmissions] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [openId, setOpenId] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const [notesBySub, setNotesBySub] = useState(new Map());
+  const [toastMsg, setToastMsg] = useState(null);
+
+  // Mutable refs for the push handler to avoid stale closures.
+  const stateRef = useRef({ openId: null, sfi_id: me.sfi_id });
+  stateRef.current.openId = openId;
+
+  const toast = (m) => setToastMsg(m);
+
+  const loadSubmissions = () => api("./api/admin/messages").then((r) => setSubmissions(r.submissions || []));
+  const loadFields = () => api("./api/admin/fields").then((r) => setFields(r.fields || []));
+
+  useEffect(() => {
+    loadSubmissions().catch((e) => toast(e.message || "load failed"));
+    loadFields().catch((e) => toast(e.message || "load failed"));
+    const hb = setInterval(() => { api("./api/admin/register", {}).catch(() => {}); }, 30_000);
+    return () => clearInterval(hb);
+  }, []);
+
+  useFramePush((d) => {
+    if (typeof d.type !== "string") return;
+    if (d.sfi_id && d.sfi_id !== stateRef.current.sfi_id) return;
+    if (d.type === "hd_new_submission" && d.submission) {
+      setSubmissions((prev) => [d.submission, ...prev]);
+      setHighlightId(d.submission.id);
+      setTimeout(() => setHighlightId(null), 1200);
+      toast(`New message from ${d.submission.email}`);
+    } else if (d.type === "hd_submission_updated") {
+      setSubmissions((prev) => prev.map((s) => s.id === d.id ? { ...s, status: d.status } : s));
+    } else if (d.type === "hd_submission_deleted") {
+      setSubmissions((prev) => prev.filter((s) => s.id !== d.id));
+      if (stateRef.current.openId === d.id) setOpenId(null);
+    } else if (d.type === "hd_note_added") {
+      setNotesBySub((prev) => { const m = new Map(prev); m.set(d.submission_id, d.notes || []); return m; });
+    } else if (d.type === "hd_fields_changed") {
+      loadFields().catch(() => {});
+    }
+  });
+
+  useEffect(() => {
+    if (!toastMsg) return;
+    const id = setTimeout(() => setToastMsg(null), 2200);
+    return () => clearTimeout(id);
+  }, [toastMsg]);
+
+  const setStatus = async (id, status) => {
+    try {
+      await api(`./api/admin/messages/${id}/status`, { status }, "PUT");
+    } catch (e) { toast(e.message || "update failed"); }
+  };
+  const deleteSubmission = async (id) => {
+    if (!(await frame.confirm("Delete this message and all its notes?", { danger: true, okLabel: "Delete" }))) return;
+    try {
+      await api(`./api/admin/messages/${id}`, null, "DELETE");
+    } catch (e) { toast(e.message || "delete failed"); }
+  };
+  const addNote = async (id, body) => {
+    try {
+      const { notes } = await api(`./api/admin/messages/${id}/notes`, { body });
+      setNotesBySub((prev) => { const m = new Map(prev); m.set(id, notes || []); return m; });
+    } catch (e) { toast(e.message || "failed"); }
+  };
+  const fetchNotes = (subId) => {
+    if (notesBySub.has(subId)) return;
+    api(`./api/admin/messages/${subId}/notes`).then(({ notes }) => {
+      setNotesBySub((prev) => { const m = new Map(prev); m.set(subId, notes || []); return m; });
+    }).catch(() => {});
+  };
+
+  const createField = async (payload) => {
+    try {
+      await api("./api/admin/fields", payload);
+      await loadFields();
+    } catch (e) { toast(e.message || "failed"); }
+  };
+  const setFieldRequired = async (fid, required) => {
+    try { await api(`./api/admin/fields/${fid}`, { required }, "PUT"); }
+    catch (e) { toast(e.message || "failed"); await loadFields(); }
+  };
+  const deleteField = async (fid) => {
+    if (!(await frame.confirm("Remove this field?", { danger: true, okLabel: "Remove" }))) return;
+    try { await api(`./api/admin/fields/${fid}`, null, "DELETE"); await loadFields(); }
+    catch (e) { toast(e.message || "failed"); }
+  };
+
+  const newCount = submissions.filter((s) => s.status === "new").length;
+
+  return html`<section class="hd-admin">
+    <header class="hd-admin-header">
+      <h1><i class="ph-light ph-lifebuoy icon-md"></i> Help Desk</h1>
+      <nav class="hd-tabs">
+        <button class=${"hd-tab" + (tab === "inbox" ? " active" : "")} onClick=${() => setTab("inbox")}>
+          Inbox ${newCount > 0 && html`<span class="hd-count-badge">${newCount}</span>`}
+        </button>
+        <button class=${"hd-tab" + (tab === "fields" ? " active" : "")} onClick=${() => setTab("fields")}>
+          Form Fields
+        </button>
+      </nav>
+    </header>
+    <div class="hd-admin-body">
+      ${tab === "inbox"
+        ? html`<${InboxView} submissions=${submissions} fields=${fields}
+            openId=${openId} highlightId=${highlightId} notesBySub=${notesBySub}
+            setOpenId=${setOpenId}
+            onToggleNotes=${fetchNotes}
+            onSetStatus=${setStatus} onDelete=${deleteSubmission} onAddNote=${addNote} />`
+        : html`<${FieldsView} fields=${fields} onCreate=${createField}
+            onSetRequired=${setFieldRequired} onDelete=${deleteField} toast=${toast} />`}
+    </div>
+    ${toastMsg && html`<div class="hd-toast show">${toastMsg}</div>`}
+  </section>`;
+}
+
+function App() {
+  return me.is_anon ? html`<${AnonForm} />` : html`<${AdminView} />`;
+}
+
+render(html`<${App}/>`, document.getElementById("app"));
+  </script>
+</body>
+</html>

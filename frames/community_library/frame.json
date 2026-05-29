@@ -1,0 +1,11 @@
+{
+    "name": "Community Library",
+    "description": "Track items shared by a community — books, tools, gear — and who has them checked out. Items and members live in shared SyncTables (the members table is compatible with Member Manager so the same roster can be reused). Per-placement preferences (org name, borrow durations, owner-only edit) are stored in a local JSON file.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at": "2026-04-27 12:00:00.000000 UTC",
+    "modified_at": "2026-05-22T14:16:13Z",
+    "depends_on_capabilities": []
+}

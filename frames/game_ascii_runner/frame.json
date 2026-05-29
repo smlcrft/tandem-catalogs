@@ -1,0 +1,11 @@
+{
+    "name": "ASCII Runner",
+    "description": "A retro side-scrolling ASCII game where you jump over rocks and duck under birds. Use arrow keys to survive as long as you can!",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at":  "2026-05-01T20:32:16Z",
+    "modified_at": "2026-05-20T18:43:14Z",
+    "depends_on_capabilities": []
+}

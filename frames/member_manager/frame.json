@@ -1,0 +1,11 @@
+{
+    "name": "Member Manager",
+    "description": "View and manage a roster of people and their roles within an organization. Member entries are stored in a shared SyncTable so every space member sees the same list. Per-placement preferences (org name, available roles, edit policy) are stored in a local JSON file.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at": "2026-04-26 12:00:00.000000 UTC",
+    "modified_at": "2026-05-22T14:16:13Z",
+    "depends_on_capabilities": []
+}

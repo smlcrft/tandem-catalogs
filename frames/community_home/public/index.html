@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Community Home</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+<main id="app" class="ch-root"></main>
+<script type="module">
+import { frame, html, render, useState, useEffect, useRef, useFramePush, Editable } from "/lib/js/framelib.js";
+
+const ACCENTS = [
+  { id: "c1",  label: "Teal" },
+  { id: "c2",  label: "Red-orange" },
+  { id: "c3",  label: "Purple" },
+  { id: "c4",  label: "Amber" },
+  { id: "c5",  label: "Green" },
+  { id: "c6",  label: "Mauve" },
+  { id: "c7",  label: "Blue-grey" },
+  { id: "c8",  label: "Warm orange" },
+  { id: "c9",  label: "Citrine" },
+  { id: "c10", label: "Plum" },
+  { id: "c11", label: "Indigo" },
+  { id: "c12", label: "Sunset" },
+];
+
+const peer = window.__peer || {};
+const me = {
+  is_anon: peer.is_anon || !peer.user_id,
+  sfi_id: peer.sfi_id || new URLSearchParams(location.search).get("sfi") || "",
+};
+
+function paragraphsArray(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  return trimmed.split(/\n\s*\n/).map((p, i) => {
+    const lines = p.split("\n");
+    const children = lines.flatMap((line, j) => j > 0 ? [html`<br/>`, line] : [line]);
+    return html`<p key=${i}>${children}</p>`;
+  });
+}
+
+function App() {
+  const [page, setPage] = useState(null);
+  const [err, setErr] = useState(null);
+  const [mode, setMode] = useState("edit");
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    frame.api("api/page").then(setPage).catch(e => setErr(e.message || String(e)));
+  }, []);
+
+  useFramePush({
+    ch_page_updated: (d) => {
+      if (me.sfi_id && d.sfi_id && d.sfi_id !== me.sfi_id) return;
+      if (d.page) setPage(d.page);
+    },
+  });
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  if (err) return html`<div class="ch-loading center">failed to load: ${err}</div>`;
+  if (!page) return html`<div class="ch-loading center">loading…</div>`;
+
+  const view = (me.is_anon || mode === "preview")
+    ? html`<${PublicView} page=${page} mode=${me.is_anon ? "public" : "preview"} onExitPreview=${() => setMode("edit")} />`
+    : html`<${AdminView} page=${page} onPreview=${() => setMode("preview")} onError=${setToast} />`;
+
+  return html`
+    ${view}
+    ${toast && html`<div class="ch-toast show">${toast}</div>`}
+  `;
+}
+
+function PublicView({ page, mode, onExitPreview }) {
+  const accent = page.accent || "c1";
+  const blocks = (page.blocks || []).map(b => html`<${PublicBlock} block=${b} key=${b.id} />`).filter(Boolean);
+  return html`
+    ${mode === "preview" && html`
+      <div class="ch-preview-bar">
+        <span class="muted"><i class="ph-light ph-eye icon-sm"></i> Preview — this is what visitors see</span>
+        <button class="ghost" onClick=${onExitPreview}>
+          <i class="ph-light ph-arrow-left icon-sm"></i> back to edit
+        </button>
+      </div>
+    `}
+    <div class="ch-public" style=${`--ch: var(--os-${accent});`}>
+      <article class="ch-page">
+        <header class="ch-hero">
+          <h1>${page.title || "Untitled"}</h1>
+          ${page.tagline && html`<p class="ch-tagline">${page.tagline}</p>`}
+        </header>
+        <div class="ch-blocks">
+          ${blocks.length > 0 ? blocks : html`<p class="muted ch-empty">This page is still being set up. Check back soon.</p>`}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function PublicBlock({ block: b }) {
+  if (b.kind === "section") {
+    const heading = (b.heading || "").trim();
+    const body = String(b.body || "");
+    if (!heading && !body.trim()) return null;
+    // format === "html" renders the body verbatim so admins can drop in custom markup.
+    // Trusted input: only known members of the space can write it. Anon visitors only read.
+    const bodyEl = !body.trim() ? null : b.format === "html"
+      ? html`<div class="ch-section-body is-html" dangerouslySetInnerHTML=${{ __html: body }}></div>`
+      : html`<div class="ch-section-body">${paragraphsArray(body)}</div>`;
+    return html`
+      <section class="ch-section">
+        ${heading && html`<h2>${heading}</h2>`}
+        ${bodyEl}
+      </section>
+    `;
+  }
+  if (b.kind === "link") {
+    const label = (b.label || "").trim();
+    const url = (b.url || "").trim();
+    if (!label || !url) return null;
+    return html`
+      <a class="ch-link" href=${url} target="_blank" rel="noopener noreferrer">
+        <span>${label}</span>
+        <i class="ph-light ph-arrow-up-right icon-sm"></i>
+      </a>
+    `;
+  }
+  if (b.kind === "pub_frame") {
+    const url = (b.url || "").trim();
+    if (!url) return null;
+    const title = (b.heading || "").trim();
+    const w = Number(b.width) || 320;
+    const h = Number(b.height) || 320;
+    return html`
+      <div class="pub-frame-wrap" style=${`width: ${w}px;`}>
+        ${title && html`<div class="pub-frame-title">${title}</div>`}
+        <iframe src=${url} class="pub-frame" loading="lazy" referrerpolicy="no-referrer"
+          style=${`width: ${w}px; height: ${h}px;`}
+          sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>
+      </div>
+    `;
+  }
+  return null;
+}
+
+function AdminView({ page, onPreview, onError }) {
+  const blocks = page.blocks || [];
+  const handle = (p) => p.catch(e => onError(e.message || "failed"));
+  const savePage   = (patch)     => handle(frame.api("api/admin/page", patch, "PUT"));
+  const saveBlock  = (id, patch) => handle(frame.api("api/admin/blocks/" + id, patch, "PUT"));
+  const deleteBlk  = (id)        => handle(frame.api("api/admin/blocks/" + id, null, "DELETE"));
+  const addBlock   = (kind) => {
+    const payload = { kind };
+    if (kind === "section") { payload.heading = "New section"; payload.body = ""; }
+    else if (kind === "link") { payload.label = "New link"; payload.url = "https://example.com"; }
+    else if (kind === "pub_frame") { payload.url = "https://example.com"; }
+    handle(frame.api("api/admin/blocks", payload));
+  };
+
+  return html`
+    <section class="ch-admin" style=${`--ch: var(--os-${page.accent || "c1"});`}>
+      <header class="ch-admin-header">
+        <h1><i class="ph-light ph-browsers icon-md"></i> Community Home</h1>
+        <div class="row" style="gap: var(--os-sp-sm);">
+          <button class="ghost" onClick=${onPreview}>
+            <i class="ph-light ph-eye icon-sm"></i> Preview public page
+          </button>
+        </div>
+      </header>
+      <div class="ch-admin-body">
+        <form class="ch-editor stack" autocomplete="off" onSubmit=${(e) => e.preventDefault()}>
+          <div class="ch-edit-block">
+            <label for="ch-title">Page title</label>
+            <${Editable} id="ch-title" type="text" maxlength=${200} placeholder="Welcome to our community"
+              value=${page.title} onSave=${(v) => savePage({ title: v })} />
+          </div>
+          <div class="ch-edit-block">
+            <label for="ch-tagline">Tagline</label>
+            <${Editable} id="ch-tagline" type="text" maxlength=${400} placeholder="A short sentence under the title"
+              value=${page.tagline} onSave=${(v) => savePage({ tagline: v })} />
+          </div>
+          <div class="ch-edit-block">
+            <label>Accent color</label>
+            <div class="ch-accents">
+              ${ACCENTS.map((a) => html`
+                <button type="button" key=${a.id}
+                  class=${"ch-accent-swatch " + (page.accent === a.id ? "selected" : "")}
+                  style=${`background: var(--os-${a.id});`} title=${a.label}
+                  onClick=${() => savePage({ accent: a.id })}>
+                  ${page.accent === a.id && html`<i class="ph-light ph-check"></i>`}
+                </button>
+              `)}
+            </div>
+          </div>
+          <div class="ch-edit-block">
+            <label>Page content</label>
+            <div class="ch-blocks-editor">
+              ${blocks.length === 0
+                ? html`<div class="muted ch-hint">Your page is empty. Use the buttons below to add sections, links, or embedded public frames in any order.</div>`
+                : blocks.map((b) => html`<${BlockRow} block=${b} key=${b.id} onSave=${saveBlock} onDelete=${deleteBlk} />`)}
+            </div>
+            <div class="ch-add-btns">
+              <button type="button" class="ghost ch-add-btn" onClick=${() => addBlock("section")}>
+                <i class="ph-light ph-plus icon-sm"></i> add section
+              </button>
+              <button type="button" class="ghost ch-add-btn" onClick=${() => addBlock("link")}>
+                <i class="ph-light ph-plus icon-sm"></i> add link
+              </button>
+              <button type="button" class="ghost ch-add-btn" onClick=${() => addBlock("pub_frame")}>
+                <i class="ph-light ph-plus icon-sm"></i> add public frame
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+  `;
+}
+
+function BlockRow({ block: b, onSave, onDelete }) {
+  if (b.kind === "section") {
+    const isHtml = b.format === "html";
+    const placeholder = isHtml
+      ? "Raw HTML — e.g. <div class='my-card'><img src='...'/> custom markup</div>"
+      : "Body text. Leave a blank line to start a new paragraph.";
+    return html`
+      <div class=${"ch-row ch-section-row " + (isHtml ? "is-html" : "")}>
+        <div class="ch-row-head">
+          <span class="ch-kind-tag"><i class="ph-light ph-text-aa icon-sm"></i> section</span>
+          <${Editable} type="text" maxlength=${200} placeholder="Section heading"
+            value=${b.heading} onSave=${(v) => onSave(b.id, { heading: v })} />
+          <div class="ch-format-toggle" role="group" aria-label="Section format">
+            <button type="button" class=${"ch-fmt " + (!isHtml ? "active" : "")}
+              title="Plain text with paragraphs" onClick=${() => onSave(b.id, { format: "text" })}>
+              <i class="ph-light ph-text-aa icon-sm"></i> text
+            </button>
+            <button type="button" class=${"ch-fmt " + (isHtml ? "active" : "")}
+              title="Raw HTML — inserted verbatim on the public page" onClick=${() => onSave(b.id, { format: "html" })}>
+              <i class="ph-light ph-code icon-sm"></i> HTML
+            </button>
+          </div>
+          <button type="button" class="ghost" title="Remove section" onClick=${() => onDelete(b.id)}>
+            <i class="ph-light ph-trash icon-sm"></i>
+          </button>
+        </div>
+        <${Editable} tag="textarea" rows=${4} maxlength=${10000}
+          class=${isHtml ? "ch-code" : ""} spellcheck=${!isHtml} placeholder=${placeholder}
+          value=${b.body} onSave=${(v) => onSave(b.id, { body: v })} />
+        ${isHtml && html`<div class="ch-fmt-hint muted">Raw HTML is inserted verbatim. Anything you write here runs in the visitor's iframe — only paste code you trust.</div>`}
+      </div>
+    `;
+  }
+  if (b.kind === "link") {
+    return html`
+      <div class="ch-row ch-link-row">
+        <span class="ch-kind-tag"><i class="ph-light ph-link icon-sm"></i> link</span>
+        <${Editable} type="text" maxlength=${120} placeholder="Label"
+          value=${b.label} onSave=${(v) => onSave(b.id, { label: v })} />
+        <${Editable} type="url" maxlength=${2048} placeholder="https://…"
+          value=${b.url} onSave=${(v) => onSave(b.id, { url: v })} />
+        <button type="button" class="ghost" title="Remove link" onClick=${() => onDelete(b.id)}>
+          <i class="ph-light ph-trash icon-sm"></i>
+        </button>
+      </div>
+    `;
+  }
+  if (b.kind === "pub_frame") {
+    const w = Number(b.width) || 320;
+    const h = Number(b.height) || 320;
+    return html`
+      <div class="ch-row ch-pubframe-row">
+        <div class="ch-row-head">
+          <span class="ch-kind-tag"><i class="ph-light ph-browsers icon-sm"></i> public frame</span>
+          <${Editable} type="text" maxlength=${200} placeholder="Optional title shown above the embed"
+            value=${b.heading || ""} onSave=${(v) => onSave(b.id, { heading: v })} />
+          <button type="button" class="ghost" title="Remove public frame" onClick=${() => onDelete(b.id)}>
+            <i class="ph-light ph-trash icon-sm"></i>
+          </button>
+        </div>
+        <${Editable} type="url" maxlength=${2048} placeholder="https://tandem.place/go/#t=frame&l=…"
+          value=${b.url} onSave=${(v) => onSave(b.id, { url: v })} />
+        <div class="ch-pubframe-dims">
+          <label>Width
+            <${Editable} type="number" min=${80} max=${2000} step=${10}
+              value=${String(w)} onSave=${(v) => onSave(b.id, { width: Number(v) || 320 })} />
+          </label>
+          <label>Height
+            <${Editable} type="number" min=${80} max=${2000} step=${10}
+              value=${String(h)} onSave=${(v) => onSave(b.id, { height: Number(v) || 320 })} />
+          </label>
+          <span class="muted ch-fmt-hint">px — visitors see the iframe at this size.</span>
+        </div>
+      </div>
+    `;
+  }
+  return null;
+}
+
+render(html`<${App}/>`, document.getElementById("app"));
+</script>
+</body>
+</html>

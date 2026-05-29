@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; padding: 16px; height: 100vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    #search-row { display: flex; gap: 6px; }
+    #location-input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.3); background: rgba(128,128,128,0.08); font-size: 0.85rem; color: inherit; outline: none; }
+    #location-input:focus { border-color: rgba(128,128,128,0.6); }
+    #search-btn { padding: 6px 12px; border-radius: 6px; border: none; background: rgba(128,128,128,0.15); color: inherit; font-size: 0.85rem; cursor: pointer; }
+    #search-btn:hover { background: rgba(128,128,128,0.25); }
+    #error { color: tomato; font-size: 0.8rem; display: none; }
+    #location-label { font-size: 0.85rem; opacity: 0.6; min-height: 1.2em; }
+    #current { display: flex; align-items: center; gap: 16px; }
+    #current .icon { font-size: 3rem; line-height: 1; }
+    #current .temp { font-size: 2.8rem; font-weight: 600; }
+    #current .details { font-size: 0.8rem; opacity: 0.7; line-height: 1.7; }
+    #condition { font-size: 1rem; opacity: 0.8; min-height: 1.4em; }
+    #forecast { display: flex; gap: 8px; flex: 1; }
+    .day { flex: 1; border-radius: 8px; padding: 8px 4px; text-align: center; background: rgba(128,128,128,0.08); display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+    .day .day-name { font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; }
+    .day .day-icon { font-size: 1.4rem; }
+    .day .day-hi { font-size: 0.9rem; font-weight: 600; }
+    .day .day-lo { font-size: 0.75rem; opacity: 0.55; }
+    .day .day-precip { font-size: 0.65rem; opacity: 0.5; }
+    #updated { font-size: 0.65rem; opacity: 0.4; text-align: right; }
+  </style>
+</head>
+<body>
+  <div id="search-row">
+    <input id="location-input" type="text" placeholder="City, State or Country…" autocomplete="off" spellcheck="false">
+    <button id="search-btn">Search</button>
+  </div>
+  <div id="error"></div>
+  <div id="location-label"></div>
+  <div id="current">
+    <div class="icon" id="cur-icon"></div>
+    <div class="temp" id="cur-temp"></div>
+    <div class="details">
+      <div>Feels like <span id="cur-feels">—</span></div>
+      <div>Humidity <span id="cur-humidity">—</span></div>
+      <div>Wind <span id="cur-wind">—</span></div>
+    </div>
+  </div>
+  <div id="condition"></div>
+  <div id="forecast"></div>
+  <div id="updated"></div>
+  <script type="module">
+    import { frame } from "/lib/js/framelib.js";
+
+    const WMO = {
+      0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
+      45:"Fog", 48:"Icy fog",
+      51:"Light drizzle", 53:"Drizzle", 55:"Heavy drizzle",
+      61:"Light rain", 63:"Rain", 65:"Heavy rain",
+      71:"Light snow", 73:"Snow", 75:"Heavy snow", 77:"Snow grains",
+      80:"Showers", 81:"Showers", 82:"Violent showers",
+      85:"Snow showers", 86:"Heavy snow showers",
+      95:"Thunderstorm", 96:"Thunderstorm w/ hail", 99:"Thunderstorm w/ hail",
+    };
+    const WMO_ICON = {
+      0:"☀️", 1:"🌤️", 2:"⛅", 3:"☁️",
+      45:"🌫️", 48:"🌫️",
+      51:"🌦️", 53:"🌦️", 55:"🌧️",
+      61:"🌧️", 63:"🌧️", 65:"🌧️",
+      71:"🌨️", 73:"🌨️", 75:"❄️", 77:"❄️",
+      80:"🌦️", 81:"🌧️", 82:"⛈️",
+      85:"🌨️", 86:"❄️",
+      95:"⛈️", 96:"⛈️", 99:"⛈️",
+    };
+    function wmoLabel(code) { return WMO[code] ?? "Unknown"; }
+    function wmoIcon(code) { return WMO_ICON[code] ?? "🌡️"; }
+    function dayName(isoDate) {
+      return new Date(isoDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" });
+    }
+
+    const input = document.getElementById("location-input");
+    const searchBtn = document.getElementById("search-btn");
+    let refreshTimer = null;
+
+    async function load(locationQuery) {
+      if (!locationQuery) return;
+      document.getElementById("updated").textContent = "Fetching forecast...";
+      const errorEl = document.getElementById("error");
+      errorEl.style.display = "none";
+      try {
+        const d = await frame.api("api/weather?location=" + encodeURIComponent(locationQuery));
+        if (d.error) throw new Error(d.error);
+
+        localStorage.setItem("weather_location", locationQuery);
+
+        document.getElementById("location-label").textContent = d.location.name;
+        const cur = d.current;
+        const code = cur.weather_code;
+        document.getElementById("cur-icon").textContent = wmoIcon(code);
+        document.getElementById("cur-temp").textContent = Math.round(cur.temperature_2m) + "°";
+        document.getElementById("cur-feels").textContent = Math.round(cur.apparent_temperature) + "°";
+        document.getElementById("cur-humidity").textContent = cur.relative_humidity_2m + "%";
+        document.getElementById("cur-wind").textContent = Math.round(cur.wind_speed_10m) + " mph";
+        document.getElementById("condition").textContent = wmoLabel(code);
+
+        const daily = d.daily;
+        const forecastEl = document.getElementById("forecast");
+        forecastEl.innerHTML = "";
+        for (let i = 0; i < daily.time.length; i++) {
+          const precip = daily.precipitation_sum[i];
+          const div = document.createElement("div");
+          div.className = "day";
+          div.innerHTML = `
+            <div class="day-name">${dayName(daily.time[i])}</div>
+            <div class="day-icon">${wmoIcon(daily.weather_code[i])}</div>
+            <div class="day-hi">${Math.round(daily.temperature_2m_max[i])}°</div>
+            <div class="day-lo">${Math.round(daily.temperature_2m_min[i])}°</div>
+            ${precip > 0 ? `<div class="day-precip">${precip.toFixed(2)}"</div>` : ""}
+          `;
+          forecastEl.appendChild(div);
+        }
+
+        document.getElementById("updated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Re-fetch after 5 minutes (matching backend cache TTL).
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => load(locationQuery), 5.01 * 60 * 1000);
+      } catch (e) {
+        errorEl.textContent = e.message;
+        errorEl.style.display = "block";
+      }
+    }
+
+    function search() {
+      const q = input.value.trim();
+      if (q) load(q);
+    }
+
+    searchBtn.addEventListener("click", search);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+
+    // Restore last searched location on load.
+    const saved = localStorage.getItem("weather_location") || "98102";
+    if (saved) {
+      input.value = saved;
+      load(saved);
+    }
+  </script>
+</body>
+</html>

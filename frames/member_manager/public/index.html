@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Member Manager</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body class="ch1">
+<div id="root"></div>
+<script type="module">
+import { frame, html, render, useState, useEffect, useFramePush, WAITING, WaitingForOwner } from "/lib/js/framelib.js";
+
+function fmtDate(ms) {
+  const n = Number(ms);
+  if (!n) return "";
+  const d = new Date(n);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function App() {
+  const [state, setState] = useState(null); // { prefs, viewer, can_edit }
+  const [members, setMembers] = useState([]);
+  const [publicDisabled, setPublicDisabled] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  async function loadState() {
+    const s = await frame.apiSafe("api/state");
+    if (s === WAITING) { setWaiting(true); return null; }
+    setState(s);
+    setWaiting(false);
+    return s;
+  }
+
+  async function loadMembers() {
+    const r = await frame.apiSafe("api/members");
+    if (r === WAITING) { setWaiting(true); return; }
+    setPublicDisabled(!!r.public_disabled);
+    setMembers(r.rows || []);
+  }
+
+  useEffect(() => {
+    (async () => {
+      const s = await loadState();
+      if (s) await loadMembers();
+    })();
+  }, []);
+
+  useFramePush({
+    members_changed: () => loadMembers(),
+    settings_changed: async () => { await loadState(); await loadMembers(); },
+  });
+
+  if (waiting) return html`<${WaitingForOwner} className="empty" message="Waiting for the space owner to bind a SyncTable for this roster…" />`;
+  if (!state) return html`<div id="list" class="empty">Loading…</div>`;
+
+  const prefs = state.prefs;
+  const viewer = state.viewer;
+  const canEdit = state.can_edit;
+  const orgName = prefs.org_name || "Members";
+
+  document.title = orgName + " · Member Manager";
+
+  const showReadonlyNote = !canEdit && prefs.owner_only_edit && !viewer.is_anon;
+
+  async function addMember(name, email, role) {
+    try {
+      await frame.api("api/member", { name, email, role });
+    } catch (e) {
+      await frame.alert(e.message || "failed");
+    }
+  }
+
+  async function updateMember(row, patch) {
+    try {
+      await frame.api("api/member", { row_id: row._row_id, name: row.name, email: row.email, role: row.role, ...patch });
+    } catch (e) {
+      await frame.alert(e.message || "failed");
+      loadMembers();
+    }
+  }
+
+  async function delMember(row) {
+    try {
+      await frame.api("api/member/delete", { row_id: row._row_id });
+    } catch (e) {
+      await frame.alert(e.message || "failed");
+    }
+  }
+
+  return html`
+    <header class="page-header">
+      <div class="title">
+        <i class="ph-light ph-users-three icon-md"></i>
+        <h1>${orgName}</h1>
+      </div>
+      <div class="header-actions">
+        <span class="badge">${publicDisabled ? "—" : String(members.length)}</span>
+        ${viewer.is_owner && html`
+          <button class="ghost" title="Settings" onClick=${() => setShowSettings(true)}>
+            <i class="ph-light ph-gear icon-sm"></i>
+          </button>
+        `}
+      </div>
+    </header>
+
+    ${canEdit && html`<${AddRow} roles=${prefs.roles} onAdd=${addMember} />`}
+
+    ${showReadonlyNote && html`
+      <p class="muted readonly-note">
+        <i class="ph-light ph-lock-simple icon-sm"></i>
+        Only the frame owner can edit this roster.
+      </p>
+    `}
+
+    <section id="list-wrap">
+      <${MemberList}
+        publicDisabled=${publicDisabled}
+        members=${members}
+        viewer=${viewer}
+        canEdit=${canEdit}
+        roles=${prefs.roles}
+        onUpdate=${updateMember}
+        onDelete=${delMember}
+      />
+    </section>
+
+    ${showSettings && html`
+      <${SettingsDialog}
+        prefs=${prefs}
+        onClose=${() => setShowSettings(false)}
+        onSaved=${async () => { setShowSettings(false); await loadState(); await loadMembers(); }}
+      />
+    `}
+  `;
+}
+
+function AddRow({ roles, onAdd }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState(roles[0] || "");
+
+  useEffect(() => { if (!role && roles.length) setRole(roles[0]); }, [roles]);
+
+  async function submit() {
+    const n = name.trim();
+    const em = email.trim();
+    if (!n || !em || !role) return;
+    await onAdd(n, em, role);
+    setName("");
+    setEmail("");
+  }
+
+  return html`
+    <section class="surface compose">
+      <input type="text" placeholder="Full name" maxlength="120" autocomplete="off"
+        value=${name} onInput=${(e) => setName(e.target.value)} />
+      <input type="email" placeholder="email@example.com" maxlength="200" autocomplete="off"
+        value=${email} onInput=${(e) => setEmail(e.target.value)} />
+      <select value=${role} onChange=${(e) => setRole(e.target.value)}>
+        ${roles.map((r) => html`<option key=${r} value=${r}>${r}</option>`)}
+      </select>
+      <button onClick=${submit}><i class="ph-light ph-plus icon-sm"></i> add</button>
+    </section>
+  `;
+}
+
+function MemberList({ publicDisabled, members, viewer, canEdit, roles, onUpdate, onDelete }) {
+  if (publicDisabled) {
+    return html`
+      <div id="list" class="empty">
+        <i class="ph-light ph-eye-slash icon-md"></i>
+        <div>Public view of member list is disabled.</div>
+      </div>
+    `;
+  }
+
+  if (!members.length) {
+    return html`
+      <div id="list" class="empty">
+        ${canEdit ? "No members yet — add the first one above." : "No members yet."}
+      </div>
+    `;
+  }
+
+  // Anonymous viewers (public viewing allowed): read-only name + role list.
+  if (viewer.is_anon) {
+    return html`
+      <div id="list" class="public-list">
+        ${members.map((m) => html`
+          <div class="public-row" key=${m._row_id}>
+            <span class="public-name">${m.name}</span>
+            <span class="public-role">${m.role}</span>
+          </div>
+        `)}
+      </div>
+    `;
+  }
+
+  return html`
+    <div id="list">
+      ${members.map((m) => html`
+        <${MemberRow} key=${m._row_id} member=${m} canEdit=${canEdit} roles=${roles} onUpdate=${onUpdate} onDelete=${onDelete} />
+      `)}
+    </div>
+  `;
+}
+
+function MemberRow({ member, canEdit, roles, onUpdate, onDelete }) {
+  const knownRole = roles.includes(member.role);
+
+  async function editClick() {
+    const name = await frame.prompt("Name", { defaultValue: member.name });
+    if (name === null) return;
+    const email = await frame.prompt("Email", { defaultValue: member.email });
+    if (email === null) return;
+    onUpdate(member, { name: name.trim(), email: email.trim() });
+  }
+
+  async function deleteClick() {
+    if (!(await frame.confirm(`Remove ${member.name}?`, { danger: true, okLabel: "Remove" }))) return;
+    onDelete(member);
+  }
+
+  return html`
+    <div class="member">
+      <div class="member__main">
+        <div class="member__name">${member.name}</div>
+        <div class="member__meta">${member.email} · added ${fmtDate(member._created_at)}</div>
+      </div>
+      <div class="member__role">
+        ${canEdit ? html`
+          <select class="role-select" value=${member.role}
+            onChange=${(e) => onUpdate(member, { role: e.target.value })}>
+            ${roles.map((r) => html`<option key=${r} value=${r}>${r}</option>`)}
+            ${!knownRole && html`<option value=${member.role}>${member.role} (legacy)</option>`}
+          </select>
+        ` : member.role}
+      </div>
+      ${canEdit && html`
+        <div class="member__actions">
+          <button class="edit" title="Edit" onClick=${editClick}>
+            <i class="ph-light ph-pencil-simple icon-sm"></i>
+          </button>
+          <button class="danger delete" title="Remove" onClick=${deleteClick}>
+            <i class="ph-light ph-trash icon-sm"></i>
+          </button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function SettingsDialog({ prefs, onClose, onSaved }) {
+  const [orgName, setOrgName] = useState(prefs.org_name || "");
+  const [rolesText, setRolesText] = useState((prefs.roles || []).join("\n"));
+  const [ownerOnly, setOwnerOnly] = useState(!!prefs.owner_only_edit);
+  const [allowPublic, setAllowPublic] = useState(!!prefs.allow_public_viewing);
+
+  async function save() {
+    const roles = rolesText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+    try {
+      await frame.api("api/settings", {
+        org_name: orgName.trim(),
+        roles,
+        owner_only_edit: ownerOnly,
+        allow_public_viewing: allowPublic,
+      });
+      onSaved();
+    } catch (e) {
+      await frame.alert(e.message || "failed");
+    }
+  }
+
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target.classList.contains("overlay")) onClose(); }}>
+      <div class="surface dialog">
+        <header class="dialog-header">
+          <h2>Settings</h2>
+          <button class="ghost" title="Close" onClick=${onClose}>
+            <i class="ph-light ph-x icon-sm"></i>
+          </button>
+        </header>
+        <label class="field">
+          <span>Organization name</span>
+          <input type="text" maxlength="120" value=${orgName} onInput=${(e) => setOrgName(e.target.value)} />
+        </label>
+        <label class="field">
+          <span>Available roles (one per line)</span>
+          <textarea rows="5" value=${rolesText} onInput=${(e) => setRolesText(e.target.value)}></textarea>
+        </label>
+        <label class="field row-field">
+          <input type="checkbox" checked=${ownerOnly} onChange=${(e) => setOwnerOnly(e.target.checked)} />
+          <span>Only the frame owner can edit member entries</span>
+        </label>
+        <label class="field row-field">
+          <input type="checkbox" checked=${allowPublic} onChange=${(e) => setAllowPublic(e.target.checked)} />
+          <span>Allow public (anonymous) viewers to see a read-only list of names and roles</span>
+        </label>
+        <div class="dialog-actions">
+          <button class="ghost" onClick=${onClose}>cancel</button>
+          <button onClick=${save}>save</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+render(html`<${App}/>`, document.getElementById("root"));
+</script>
+</body>
+</html>

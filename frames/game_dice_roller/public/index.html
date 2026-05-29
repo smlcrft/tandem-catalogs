@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dice Roller</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <style>
+    body { max-width: 320px; margin: 0 auto; }
+    .die {
+      font-size: 48px;
+      width: 80px; height: 80px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--os-bg-subtle);
+      border-radius: var(--os-radius-md);
+      cursor: pointer;
+      user-select: none;
+      transition: transform var(--os-transition-fast);
+    }
+    .die:active { transform: scale(0.92); }
+    .die.rolling { opacity: 0.85; }
+    .result { font-size: var(--os-fs-xl); font-weight: var(--os-weight-semibold); }
+  </style>
+</head>
+<body>
+  <div class="stack center" style="min-height: 100vh; gap: var(--os-sp-lg);">
+    <div class="die" id="die">?</div>
+    <p class="result muted" id="result">tap to roll</p>
+    <button class="ghost" id="roll-btn">
+      <i class="ph-light ph-arrow-clockwise icon-sm"></i> roll again
+    </button>
+  </div>
+  <script type="module">
+    import { frame } from "/lib/js/framelib.js";
+
+    const FACES = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+    const die = document.getElementById('die');
+    const result = document.getElementById('result');
+    let rolling = false;
+
+    function show(value, sides) {
+      if (!value) { die.textContent = '?'; return; }
+      die.textContent = (sides === 6 && value >= 1 && value <= 6) ? FACES[value - 1] : String(value);
+      result.textContent = `rolled ${value}`;
+      result.classList.remove('muted');
+    }
+
+    function animate(value, sides, roll_time_ms) {
+      rolling = true;
+      die.classList.add('rolling');
+      const end = Date.now() + roll_time_ms;
+      let bounces = 0;
+      (function tick() {
+        if (Date.now() < end) {
+          die.textContent = FACES[Math.floor(Math.random() * 6)];
+          setTimeout(tick, 60 + Math.random() * (bounces++) * 10);
+        } else {
+          show(value, sides);
+          die.classList.remove('rolling');
+          rolling = false;
+        }
+      })();
+    }
+
+    function roll() {
+      if (rolling) return;
+      frame.api('api/roll', null, 'POST').catch(() => {});
+    }
+
+    frame.api('api/state').then(({ value, sides }) => show(value, sides)).catch(() => {});
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'rolled' && !rolling) {
+        animate(e.data.value, e.data.sides, e.data.roll_time_ms);
+      }
+    });
+
+    die.addEventListener('click', roll);
+    document.getElementById('roll-btn').addEventListener('click', roll);
+  </script>
+</body>
+</html>

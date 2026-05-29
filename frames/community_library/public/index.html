@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Community Library</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body class="ch2">
+<div id="root"></div>
+<script type="module">
+import { frame, html, render, useState, useEffect, useFramePush, WAITING } from "/lib/js/framelib.js";
+
+const api = frame.apiSafe;
+
+const fmtDate = (ms) => {
+  const n = Number(ms);
+  return n ? new Date(n).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+};
+const fmtDateTime = (ms) => {
+  const n = Number(ms);
+  return n ? new Date(n).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+};
+
+const DEFAULT_PREFS = {
+  org_name: "Community Library", item_types: [], borrow_options: [],
+  default_borrow_days: 7, owner_only_edit: false, allow_public_viewing: false,
+};
+
+function App() {
+  const [state, setState] = useState(null); // { prefs, viewer, can_edit, now } | "waiting" | null
+  const [assets, setAssets] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [publicDisabled, setPublicDisabled] = useState(false);
+  const [dialog, setDialog] = useState(null); // { kind, ...payload } | null
+
+  // Returns the fetched state object so callers can read viewer without a
+  // second round-trip. "waiting" sentinel is returned when tables aren't
+  // bound yet (503), null only on hard error.
+  async function loadState() {
+    const s = await api("api/state");
+    if (s === WAITING || !s) { setState("waiting"); return null; }
+    setState(s);
+    document.title = s.prefs.org_name || "Community Library";
+    return s;
+  }
+  async function loadMembers(viewer) {
+    if (viewer?.is_anon) { setMembers([]); return; }
+    const r = await api("api/members");
+    if (r === WAITING) return;
+    setMembers((r && r.rows) || []);
+  }
+  async function loadAssets() {
+    const r = await api("api/assets");
+    if (r === WAITING || !r) return;
+    setPublicDisabled(!!r.public_disabled);
+    setAssets(r.rows || []);
+  }
+
+  // Boot.
+  useEffect(() => {
+    (async () => {
+      const s = await loadState();
+      if (!s) return;
+      await Promise.all([loadMembers(s.viewer), loadAssets()]);
+    })();
+  }, []);
+
+  // Live updates from peers. useFramePush refreshes handlers each render, so
+  // they always see the latest state?.viewer in their closure.
+  useFramePush({
+    assets_changed: () => loadAssets(),
+    members_changed: () => loadMembers(state?.viewer),
+    settings_changed: async () => {
+      const s = await loadState();
+      if (!s) return;
+      await Promise.all([loadMembers(s.viewer), loadAssets()]);
+    },
+  });
+
+  // Re-evaluate overdue status periodically (server computes status at fetch time).
+  useEffect(() => {
+    const id = setInterval(() => { if (!document.hidden) loadAssets(); }, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (state === null) return html`<div class="empty">Loading…</div>`;
+  if (state === "waiting") return html`<div class="empty">Waiting for the space owner to bind SyncTables for the library…</div>`;
+
+  const { prefs, viewer, can_edit } = state;
+  const closeDialog = () => setDialog(null);
+
+  return html`
+    <header class="page-header">
+      <div class="title">
+        <i class="ph-light ph-books icon-md"></i>
+        <h1>${prefs.org_name || "Community Library"}</h1>
+      </div>
+      <div class="header-actions">
+        <span class="badge">${publicDisabled ? "—" : String(assets.length)}</span>
+        ${viewer.is_owner && html`
+          <button class="ghost" title="Settings" onClick=${() => setDialog({ kind: "settings" })}>
+            <i class="ph-light ph-gear icon-sm"></i>
+          </button>
+        `}
+      </div>
+    </header>
+
+    ${can_edit && html`<${AddRow} types=${prefs.item_types} reload=${loadAssets} />`}
+
+    ${!can_edit && prefs.owner_only_edit && !viewer.is_anon && html`
+      <p class="muted readonly-note">
+        <i class="ph-light ph-lock-simple icon-sm"></i>
+        Only the frame owner can edit this library.
+      </p>
+    `}
+
+    ${!viewer.is_anon && html`
+      <section class="legend">
+        <span class="status-chip status-available"><span class="dot"></span>available</span>
+        <span class="status-chip status-checked_out"><span class="dot"></span>checked out</span>
+        <span class="status-chip status-overdue"><span class="dot"></span>overdue</span>
+        <span class="status-chip status-issue"><span class="dot"></span>needs attention</span>
+      </section>
+    `}
+
+    <section id="list-wrap">
+      ${publicDisabled
+        ? html`<div class="empty"><i class="ph-light ph-eye-slash icon-md"></i><div>Public view of the library is disabled.</div></div>`
+        : assets.length === 0
+          ? html`<div class="empty"><i class="ph-light ph-books icon-md"></i>
+              <div>${can_edit ? "No items yet — add the first one above." : "The library is empty."}</div></div>`
+          : viewer.is_anon
+            ? html`<div class="public-list">${assets.map((a) => html`<${PublicRow} a=${a} key=${a._row_id} />`)}</div>`
+            : html`<div class="asset-list">${assets.map((a) => html`<${AssetRow} a=${a} can_edit=${can_edit} onAction=${setDialog} reload=${loadAssets} key=${a._row_id} />`)}</div>`
+      }
+    </section>
+
+    ${dialog?.kind === "checkout" && html`<${CheckoutDialog} row=${dialog.row} members=${members} prefs=${prefs} onClose=${closeDialog} reload=${loadAssets} />`}
+    ${dialog?.kind === "attention" && html`<${AttentionDialog} row=${dialog.row} onClose=${closeDialog} reload=${loadAssets} />`}
+    ${dialog?.kind === "edit" && html`<${EditDialog} row=${dialog.row} prefs=${prefs} onClose=${closeDialog} reload=${loadAssets} />`}
+    ${dialog?.kind === "settings" && html`<${SettingsDialog} prefs=${prefs} onClose=${closeDialog} />`}
+  `;
+}
+
+function AddRow({ types, reload }) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState(types[0] || "");
+  useEffect(() => { if (!type && types[0]) setType(types[0]); }, [types]);
+  async function add() {
+    const n = name.trim();
+    if (!n || !type) return;
+    try {
+      await api("api/asset", { name: n, item_type: type });
+      setName("");
+      reload();
+    } catch (err) { await frame.alert(err.message || "failed"); }
+  }
+  return html`
+    <section class="surface compose">
+      <input type="text" placeholder="Item name" maxlength=${200} autocomplete="off"
+        value=${name} onInput=${(e) => setName(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === "Enter") add(); }} />
+      <select value=${type} onChange=${(e) => setType(e.target.value)}>
+        ${types.map((t) => html`<option key=${t} value=${t}>${t}</option>`)}
+      </select>
+      <button onClick=${add}><i class="ph-light ph-plus icon-sm"></i> add</button>
+    </section>
+  `;
+}
+
+function PublicRow({ a }) {
+  const due = a.due_at ? fmtDate(a.due_at) : "";
+  let statusText = "available";
+  if (a.status === "checked_out") statusText = due ? `checked out · due ${due}` : "checked out";
+  else if (a.status === "overdue")  statusText = due ? `overdue · was due ${due}` : "overdue";
+  else if (a.status === "issue")    statusText = "unavailable";
+  return html`
+    <div class=${"public-row status-" + a.status}>
+      <span class="status-bar"></span>
+      <div class="public-main">
+        <div class="public-name">${a.name}</div>
+        <div class="public-meta">${a.item_type} · ${statusText}</div>
+      </div>
+    </div>
+  `;
+}
+
+function AssetRow({ a, can_edit, onAction, reload }) {
+  const checkedOut = !!a.checked_out_at;
+  const borrower = a.checked_out_member_name || a.checked_out_manual_name || "";
+  const due = a.due_at ? fmtDate(a.due_at) : "";
+  const since = a.checked_out_at ? fmtDateTime(a.checked_out_at) : "";
+
+  let statusLabel = "";
+  if (a.status === "available")        statusLabel = "in library";
+  else if (a.status === "checked_out") statusLabel = `out · due ${due}`;
+  else if (a.status === "overdue")     statusLabel = `overdue · was due ${due}`;
+  else if (a.status === "issue")       statusLabel = "needs attention";
+
+  async function checkin() {
+    try { await api("api/asset/checkin", { row_id: a._row_id }); reload(); }
+    catch (err) { await frame.alert(err.message || "failed"); }
+  }
+
+  return html`
+    <div class=${"asset status-" + a.status}>
+      <span class="status-bar"></span>
+      <div class="asset-main">
+        <div class="asset-headline">
+          <span class="asset-name">${a.name}</span>
+          <span class="asset-type">${a.item_type}</span>
+        </div>
+        <div class="asset-meta">
+          ${checkedOut
+            ? html`<span class="meta-borrower">${borrower}</span><span class="meta-sep">·</span><span>since ${since}</span>`
+            : html`<span>${a.item_type}</span>`}
+        </div>
+        ${a.notes && html`<div class="asset-notes"><i class="ph-light ph-note icon-sm"></i> ${a.notes}</div>`}
+      </div>
+      <div class="asset-status">
+        <span class=${"status-chip status-" + a.status}><span class="dot"></span>${statusLabel}</span>
+      </div>
+      ${can_edit && html`
+        <div class="asset-actions">
+          ${checkedOut
+            ? html`<button class="ghost" title="Check in" onClick=${checkin}>
+                <i class="ph-light ph-arrow-u-up-left icon-sm"></i> check in
+              </button>`
+            : html`<button class="ghost" title="Check out" onClick=${() => onAction({ kind: "checkout", row: a })}>
+                <i class="ph-light ph-arrow-u-down-right icon-sm"></i> check out
+              </button>`}
+          <button class=${"ghost icon-btn " + (a.needs_attention ? "is-flagged" : "")}
+            title=${a.needs_attention ? "Update or clear flag" : "Flag for attention"}
+            onClick=${() => onAction({ kind: "attention", row: a })}>
+            <i class="ph-light ph-warning icon-sm"></i>
+          </button>
+          <button class="ghost icon-btn" title="Edit" onClick=${() => onAction({ kind: "edit", row: a })}>
+            <i class="ph-light ph-pencil-simple icon-sm"></i>
+          </button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function Overlay({ onClose, children }) {
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="surface dialog">${children}</div>
+    </div>
+  `;
+}
+
+function CheckoutDialog({ row, members, prefs, onClose, reload }) {
+  const [mode, setMode] = useState(members.length > 0 ? "member" : "manual");
+  const [memberId, setMemberId] = useState(members[0]?._row_id || "");
+  const [manual, setManual] = useState("");
+  const [days, setDays] = useState(prefs.default_borrow_days);
+
+  async function confirm() {
+    const payload = { row_id: row._row_id, borrow_days: Number(days) || prefs.default_borrow_days };
+    if (mode === "member") {
+      if (!memberId) { await frame.alert('Pick a member or switch to "Other".'); return; }
+      payload.member_id = memberId;
+    } else {
+      const m = manual.trim();
+      if (!m) { await frame.alert("Enter a name or email."); return; }
+      payload.manual_name = m;
+    }
+    try { await api("api/asset/checkout", payload); onClose(); reload(); }
+    catch (err) { await frame.alert(err.message || "failed"); }
+  }
+
+  return html`
+    <${Overlay} onClose=${onClose}>
+      <header class="dialog-header">
+        <h2>Check out item</h2>
+        <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+      </header>
+      <div class="seg-toggle">
+        <button class=${"seg-btn " + (mode === "member" ? "active" : "")} onClick=${() => setMode("member")}>Member</button>
+        <button class=${"seg-btn " + (mode === "manual" ? "active" : "")} onClick=${() => setMode("manual")}>Other</button>
+      </div>
+      ${mode === "member" && html`
+        <label class="field">
+          <span>Member</span>
+          <select value=${memberId} onChange=${(e) => setMemberId(e.target.value)}>
+            ${members.length === 0
+              ? html`<option value="">(no members in roster)</option>`
+              : members.map((m) => html`<option key=${m._row_id} value=${m._row_id}>${m.name}${m.role ? ` · ${m.role}` : ""}</option>`)}
+          </select>
+        </label>
+      `}
+      ${mode === "manual" && html`
+        <label class="field">
+          <span>Borrower name / email</span>
+          <input type="text" maxlength=${200} autocomplete="off" placeholder="e.g. alex@example.com"
+            value=${manual} onInput=${(e) => setManual(e.target.value)} />
+        </label>
+      `}
+      <label class="field">
+        <span>Borrow duration</span>
+        <select value=${days} onChange=${(e) => setDays(e.target.value)}>
+          ${prefs.borrow_options.map((o) => html`<option key=${o.days} value=${o.days}>${o.label}</option>`)}
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="ghost" onClick=${onClose}>cancel</button>
+        <button onClick=${confirm}>check out</button>
+      </div>
+    </${Overlay}>
+  `;
+}
+
+function AttentionDialog({ row, onClose, reload }) {
+  const [notes, setNotes] = useState(row.notes || "");
+  async function send(needs_attention) {
+    try { await api("api/asset/attention", { row_id: row._row_id, needs_attention, notes }); onClose(); reload(); }
+    catch (err) { await frame.alert(err.message || "failed"); }
+  }
+  return html`
+    <${Overlay} onClose=${onClose}>
+      <header class="dialog-header">
+        <h2>Mark needing attention</h2>
+        <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+      </header>
+      <label class="field">
+        <span>What's wrong? (optional)</span>
+        <textarea rows="3" maxlength=${1000} placeholder="e.g. handle is broken, missing piece, …"
+          value=${notes} onInput=${(e) => setNotes(e.target.value)}></textarea>
+      </label>
+      <div class="dialog-actions">
+        ${row.needs_attention && html`<button class="ghost danger" onClick=${() => send(false)}>clear flag</button>`}
+        <button class="ghost" onClick=${onClose}>cancel</button>
+        <button onClick=${() => send(true)}>flag</button>
+      </div>
+    </${Overlay}>
+  `;
+}
+
+function EditDialog({ row, prefs, onClose, reload }) {
+  const [name, setName] = useState(row.name || "");
+  const [type, setType] = useState(row.item_type || prefs.item_types[0] || "");
+  const [notes, setNotes] = useState(row.notes || "");
+  async function save() {
+    const n = name.trim();
+    if (!n || !type) { await frame.alert("Name and type are required."); return; }
+    try { await api("api/asset", { row_id: row._row_id, name: n, item_type: type, notes }); onClose(); reload(); }
+    catch (err) { await frame.alert(err.message || "failed"); }
+  }
+  async function del() {
+    if (!(await frame.confirm(`Delete "${row.name || "this item"}"?`, { danger: true, okLabel: "Delete" }))) return;
+    try { await api("api/asset/delete", { row_id: row._row_id }); onClose(); reload(); }
+    catch (err) { await frame.alert(err.message || "failed"); }
+  }
+  return html`
+    <${Overlay} onClose=${onClose}>
+      <header class="dialog-header">
+        <h2>Edit item</h2>
+        <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+      </header>
+      <label class="field"><span>Name</span>
+        <input type="text" maxlength=${200} value=${name} onInput=${(e) => setName(e.target.value)} />
+      </label>
+      <label class="field"><span>Type</span>
+        <select value=${type} onChange=${(e) => setType(e.target.value)}>
+          ${prefs.item_types.map((t) => html`<option key=${t} value=${t}>${t}</option>`)}
+        </select>
+      </label>
+      <label class="field"><span>Notes (optional)</span>
+        <textarea rows="3" maxlength=${1000} value=${notes} onInput=${(e) => setNotes(e.target.value)}></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button class="ghost danger" onClick=${del}>delete</button>
+        <button class="ghost" onClick=${onClose}>cancel</button>
+        <button onClick=${save}>save</button>
+      </div>
+    </${Overlay}>
+  `;
+}
+
+function parseBorrowLines(text) {
+  return text.split("\n").map((line) => {
+    const parts = line.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+    if (parts.length < 2) return null;
+    const days = Number(parts[parts.length - 1]);
+    if (!Number.isFinite(days) || days <= 0) return null;
+    return { label: parts.slice(0, -1).join(", "), days };
+  }).filter(Boolean);
+}
+
+function SettingsDialog({ prefs, onClose }) {
+  const [org, setOrg] = useState(prefs.org_name || "");
+  const [typesText, setTypesText] = useState((prefs.item_types || []).join("\n"));
+  const [borrowText, setBorrowText] = useState((prefs.borrow_options || []).map((o) => `${o.label}, ${o.days}`).join("\n"));
+  const [defaultDays, setDefaultDays] = useState(String(prefs.default_borrow_days || ""));
+  const [ownerOnly, setOwnerOnly] = useState(!!prefs.owner_only_edit);
+  const [allowPublic, setAllowPublic] = useState(!!prefs.allow_public_viewing);
+
+  // Recompute the default-borrow choices whenever the borrow-lines text changes.
+  // If the current selection is no longer valid, fall back to the first option.
+  const borrowOpts = parseBorrowLines(borrowText);
+  useEffect(() => {
+    if (!borrowOpts.some((o) => String(o.days) === defaultDays) && borrowOpts.length > 0) {
+      setDefaultDays(String(borrowOpts[0].days));
+    }
+  }, [borrowText]);
+
+  async function save() {
+    try {
+      await api("api/settings", {
+        org_name: org.trim(),
+        item_types: typesText.split("\n").map((s) => s.trim()).filter(Boolean),
+        borrow_options: borrowOpts,
+        default_borrow_days: Number(defaultDays) || borrowOpts[0]?.days,
+        owner_only_edit: ownerOnly,
+        allow_public_viewing: allowPublic,
+      });
+      onClose();
+    } catch (err) { await frame.alert(err.message || "failed"); }
+  }
+
+  return html`
+    <${Overlay} onClose=${onClose}>
+      <header class="dialog-header">
+        <h2>Library settings</h2>
+        <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+      </header>
+      <label class="field"><span>Library name</span>
+        <input type="text" maxlength=${120} value=${org} onInput=${(e) => setOrg(e.target.value)} />
+      </label>
+      <label class="field"><span>Item types (one per line)</span>
+        <textarea rows="4" value=${typesText} onInput=${(e) => setTypesText(e.target.value)}></textarea>
+      </label>
+      <label class="field"><span>Borrow durations (one per line, format: "Label, days" e.g. "1 week, 7")</span>
+        <textarea rows="4" value=${borrowText} onInput=${(e) => setBorrowText(e.target.value)}></textarea>
+      </label>
+      <label class="field"><span>Default borrow duration</span>
+        <select value=${defaultDays} onChange=${(e) => setDefaultDays(e.target.value)}>
+          ${borrowOpts.map((o) => html`<option key=${o.days} value=${o.days}>${o.label}</option>`)}
+        </select>
+      </label>
+      <label class="field row-field">
+        <input type="checkbox" checked=${ownerOnly} onChange=${(e) => setOwnerOnly(e.target.checked)} />
+        <span>Only the frame owner can edit the library</span>
+      </label>
+      <label class="field row-field">
+        <input type="checkbox" checked=${allowPublic} onChange=${(e) => setAllowPublic(e.target.checked)} />
+        <span>Allow public (anonymous) viewers to see the asset list</span>
+      </label>
+      <div class="dialog-actions">
+        <button class="ghost" onClick=${onClose}>cancel</button>
+        <button onClick=${save}>save</button>
+      </div>
+    </${Overlay}>
+  `;
+}
+
+render(html`<${App}/>`, document.getElementById("root"));
+</script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discussion</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+  <main id="app" class="dc-loading">loading…</main>
+  <script type="module">
+import { frame, html, render, useState, useEffect, useRef, Fragment, useFramePush, Editable, applyChannel } from "/lib/js/framelib.js";
+
+const peer = window.__peer || {};
+const isAnon = peer.is_anon || !peer.user_id;
+const isOwner = !!peer.is_owner;
+const userId = peer.user_id || "";
+
+const DEFAULT_REACTION_ICONS = ["thumbs-up", "heart", "fire", "smiley", "hand-waving",
+  "sparkle", "lightning", "rocket", "confetti", "star"];
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  if (d.toDateString() === now.toDateString()) return `${hh}:${mm}`;
+  const days = (now - d) / 86400000;
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: "short" }) + ` ${hh}:${mm}`;
+  return d.toLocaleDateString();
+}
+
+function Private() {
+  return html`<${Fragment}>
+    <i class="ph-light ph-lock-key"></i>
+    <div class="dc-private-title">Private discussion channel</div>
+    <div class="dc-private-sub">You need to be signed in to view or post messages.</div>
+  </${Fragment}>`;
+}
+
+function Toast({ message }) {
+  if (!message) return null;
+  return html`<div class="dc-toast show">${message}</div>`;
+}
+
+function ReactionPicker({ icons, anchorRect, onPick, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    setTimeout(() => document.addEventListener("mousedown", onDoc, true), 0);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, []);
+  // Position after mount.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !anchorRect) return;
+    const pw = el.offsetWidth, ph = el.offsetHeight;
+    let left = Math.max(4, Math.min(window.innerWidth - pw - 4, anchorRect.left));
+    let top = anchorRect.top - ph - 4;
+    if (top < 4) top = Math.min(window.innerHeight - ph - 4, anchorRect.bottom + 4);
+    top = Math.max(4, top);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+  }, [anchorRect]);
+  return html`<div class="dc-picker" ref=${ref}>
+    ${icons.map((i) => html`<button type="button" key=${i} title=${i}
+      onClick=${() => { onPick(i); onClose(); }}>
+      <i class=${"ph-light ph-" + i}></i>
+    </button>`)}
+  </div>`;
+}
+
+function SettingsOverlay({ prefs, onClose, onSave }) {
+  const [title, setTitle] = useState(prefs.title || "Discussion");
+  return html`<div class="dc-settings">
+    <div class="dc-settings-header">
+      <h2>Channel</h2>
+      <button class="dc-icon-btn" title="close" onClick=${onClose}><i class="ph-light ph-x"></i></button>
+    </div>
+    <label>
+      Title
+      <input type="text" maxlength="80" placeholder="Discussion" autofocus
+        value=${title} onInput=${(e) => setTitle(e.target.value)} />
+    </label>
+    <div class="dc-settings-actions">
+      <button class="dc-icon-btn" style="padding: 4px 10px;" onClick=${onClose}>Cancel</button>
+      <button class="dc-save" onClick=${() => { onSave({ title: title.trim() || "Discussion" }); onClose(); }}>Save</button>
+    </div>
+  </div>`;
+}
+
+function Reactions({ message: m, canDelete, onToggle, onAddReact, onDelete }) {
+  const grouped = new Map();
+  for (const r of m.reactions || []) {
+    let bucket = grouped.get(r.icon);
+    if (!bucket) { bucket = []; grouped.set(r.icon, bucket); }
+    bucket.push(r);
+  }
+  return html`<div class="dc-reactions">
+    ${[...grouped.entries()].map(([icon, list]) => {
+      const reactedByMe = list.some((r) => r.user_id === userId);
+      const names = list.map((r) => r.user_name || "user").join(", ");
+      return html`<button type="button" key=${icon}
+        class=${"dc-reaction " + (reactedByMe ? "mine" : "")}
+        title=${names}
+        onClick=${() => onToggle(m.id, icon)}>
+        <i class=${"ph-light ph-" + icon}></i><span>${list.length}</span>
+      </button>`;
+    })}
+    <button type="button" class="dc-reaction-add" title="add reaction"
+      onClick=${(e) => onAddReact(m.id, e.currentTarget.getBoundingClientRect())}>
+      <i class="ph-light ph-smiley-wink"></i>
+    </button>
+    ${canDelete && html`<button type="button" class="dc-msg-delete" title="delete message"
+      onClick=${() => onDelete(m.id)}>
+      <i class="ph-light ph-trash"></i>
+    </button>`}
+  </div>`;
+}
+
+function MessagesList({ messages, onToggle, onAddReact, onDelete }) {
+  const ref = useRef(null);
+  const prevLen = useRef(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const wasAtBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 32;
+    if (wasAtBottom || messages.length > prevLen.current) el.scrollTop = el.scrollHeight;
+    prevLen.current = messages.length;
+  }, [messages]);
+
+  if (messages.length === 0) {
+    return html`<div class="dc-messages" id="dc-messages" ref=${ref}>
+      <div class="dc-empty">No messages yet — say hi!</div>
+    </div>`;
+  }
+  let lastUserId = "";
+  let lastTs = 0;
+  const rows = messages.map((m) => {
+    const sameAuthor = m.user_id === lastUserId && (m.created_at - lastTs) < 5 * 60 * 1000;
+    const mine = m.user_id === userId;
+    lastUserId = m.user_id;
+    lastTs = m.created_at;
+    return html`<div class=${"dc-msg " + (mine ? "mine " : "") + (sameAuthor ? "" : "first")} key=${m.id} data-id=${m.id}>
+      ${!sameAuthor && html`<div class="dc-msg-meta">
+        <span class="author">${m.user_name || "user"}</span>
+        <span class="time">${fmtTime(m.created_at)}</span>
+      </div>`}
+      <div class="dc-msg-body">${m.body}</div>
+      <${Reactions} message=${m} canDelete=${mine || isOwner}
+        onToggle=${onToggle} onAddReact=${onAddReact} onDelete=${onDelete} />
+    </div>`;
+  });
+  return html`<div class="dc-messages" id="dc-messages" ref=${ref}>${rows}</div>`;
+}
+
+function Composer({ onSend }) {
+  const [val, setVal] = useState("");
+  const ref = useRef(null);
+  const autosize = () => {
+    const t = ref.current;
+    if (!t) return;
+    t.style.height = "auto";
+    t.style.height = Math.min(t.scrollHeight, 96) + "px";
+  };
+  const submit = (e) => {
+    e.preventDefault();
+    const body = val.trim();
+    if (!body) return;
+    setVal("");
+    setTimeout(autosize, 0);
+    onSend(body);
+  };
+  return html`<form class="dc-composer" autocomplete="off" onSubmit=${submit}>
+    <textarea ref=${ref} rows="1" placeholder="Write a message..." maxlength="4000"
+      value=${val}
+      onInput=${(e) => { setVal(e.target.value); autosize(); }}
+      onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(e); } }} />
+    <button type="submit" class="dc-send" title="Send" disabled=${!val.trim()}>
+      <i class="ph-light ph-paper-plane-tilt"></i>
+    </button>
+  </form>`;
+}
+
+function App() {
+  const [state, setState] = useState(null);
+  const [err, setErr] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [picker, setPicker] = useState(null); // { messageId, rect }
+
+  const messagesRef = useRef([]);
+  if (state) messagesRef.current = state.messages;
+
+  useEffect(() => {
+    if (isAnon) return;
+    frame.api("./api/state").then(setState).catch((e) => setErr(e.message || String(e)));
+  }, []);
+
+  useFramePush({
+    dc_message: (d) => setState((prev) => {
+      if (!prev || prev.messages.some((m) => m.id === d.message.id)) return prev;
+      return { ...prev, messages: [...prev.messages, d.message] };
+    }),
+    dc_delete: (d) => setState((prev) => prev ? { ...prev, messages: prev.messages.filter((m) => m.id !== d.id) } : prev),
+    dc_reactions: (d) => setState((prev) => prev ? { ...prev, messages: prev.messages.map((m) => m.id === d.message_id ? { ...m, reactions: d.reactions } : m) } : prev),
+    dc_prefs: (d) => setState((prev) => prev ? { ...prev, prefs: { ...prev.prefs, ...d.prefs } } : prev),
+  });
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  if (isAnon) {
+    return html`<${Private} />`;
+  }
+  if (err) return html`<div class="dc-loading">failed to load: ${err}</div>`;
+  if (!state) return html`<div class="dc-loading">loading…</div>`;
+
+  const { prefs, messages, can_edit_settings: canEditSettings } = state;
+  const icons = (state.reaction_icons && state.reaction_icons.length) ? state.reaction_icons : DEFAULT_REACTION_ICONS;
+
+  const fail = (label) => (err) => setToast(err.message || (label + " failed"));
+  const sendMessage = (body) => frame.api("./api/send", { body }).catch(fail("send"));
+  const toggleReact = (mid, icon) => frame.api("./api/react", { message_id: mid, icon }).catch(fail("react"));
+  const deleteMessage = (id) => frame.api("./api/delete", { id }).catch(fail("delete"));
+  const saveSettings = (patch) => frame.api("./api/settings", patch)
+    .then((data) => { if (data && data.prefs) setState((s) => s ? { ...s, prefs: { ...s.prefs, ...data.prefs } } : s); })
+    .catch(fail("save"));
+
+  // Style vars applied directly to #app so :root selectors keep working.
+  useEffect(() => { applyChannel(document.getElementById("app"), peer.space_color); }, []);
+
+  return html`<${Fragment}>
+    <div class="dc-accent"></div>
+    <div class="dc-topline">
+      <${Editable} class="dc-title-input" maxlength="80" placeholder="Discussion"
+        disabled=${!canEditSettings}
+        value=${prefs.title}
+        onSave=${(v) => saveSettings({ title: v.trim() || "Discussion" })} />
+      ${canEditSettings && html`<button class="dc-icon-btn" title="channel settings"
+        onClick=${() => setShowSettings(true)}><i class="ph-light ph-dots-three"></i></button>`}
+    </div>
+    <${MessagesList} messages=${messages}
+      onToggle=${toggleReact}
+      onAddReact=${(mid, rect) => setPicker({ messageId: mid, rect })}
+      onDelete=${deleteMessage} />
+    <${Composer} onSend=${sendMessage} />
+    ${showSettings && html`<${SettingsOverlay} prefs=${prefs}
+      onClose=${() => setShowSettings(false)}
+      onSave=${saveSettings} />`}
+    ${picker && html`<${ReactionPicker} icons=${icons} anchorRect=${picker.rect}
+      onPick=${(icon) => toggleReact(picker.messageId, icon)}
+      onClose=${() => setPicker(null)} />`}
+    <${Toast} message=${toast} />
+  </${Fragment}>`;
+}
+
+// Mount: render straight into `#app` so it keeps the .dc-root grid layout.
+const root = document.getElementById("app");
+root.className = isAnon ? "dc-private" : "dc-root";
+render(html`<${App}/>`, root);
+  </script>
+</body>
+</html>
