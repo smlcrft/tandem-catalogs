@@ -27,7 +27,7 @@
       "name": "Community Library",
       "description": "Track items shared by a community \u2014 books, tools, gear \u2014 and who has them checked out. Items and members live in shared SyncTables (the members table is compatible with Member Manager so the same roster can be reused). Per-placement preferences (org name, borrow durations, owner-only edit) are stored in a local JSON file.",
       "icon": "",
-      "modified_at": "2026-06-02T14:44:08Z",
+      "modified_at": "2026-06-02T19:29:59Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 0,
@@ -36,7 +36,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/community_library.tar.gz",
-      "package_sha256": "5a9fc2ec7e20fc4d1ccc3aadaea654021facd1e05ac022bb369c35a2eb76c0ff"
+      "package_sha256": "afaeb3514b8aa57f2674fb37591456f92c20192064ed51a4b7d0e9287a316f0f"
     },
     {
       "kind": "Frames",
@@ -214,7 +214,7 @@
       "name": "Weather Info",
       "description": "Example weather info/forecast using keyless API (open meteo)",
       "icon": "",
-      "modified_at": "2026-06-02T14:44:08Z",
+      "modified_at": "2026-06-02T19:20:00Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 0,
@@ -223,7 +223,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/weather_api.tar.gz",
-      "package_sha256": "ba5d029c8f45c40d21249da5d055b5b80c6d76a16048a2d317b9382b01338ec2"
+      "package_sha256": "6ee028ecacd573deea4f923b31820bf5ebac06d12d4d931144ca68de841b8814"
     }
   ]
 }

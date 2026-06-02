@@ -28,6 +28,14 @@ const DEFAULT_PREFS = {
   default_borrow_days: 7, owner_only_edit: false, allow_public_viewing: false,
 };
 
+// Only the checked_out → overdue transition is time-based; every other status change is
+// driven by a table mutation, which already arrives over useFramePush. So locally upgrade
+// an item to "overdue" once its due date passes, and otherwise trust the server's status.
+function liveStatus(a, now) {
+  if (a.status === "checked_out" && a.due_at && now > a.due_at) return "overdue";
+  return a.status;
+}
+
 function App() {
   const [state, setState] = useState(null); // { prefs, viewer, can_edit, now } | "waiting" | null
   const [assets, setAssets] = useState([]);
@@ -79,10 +87,16 @@ function App() {
     },
   });
 
-  // Re-evaluate overdue status periodically (server computes status at fetch time).
+  // Overdue is purely time-based — no table write happens when an item crosses its due date,
+  // so a table-change push can never fire for it. Instead of re-fetching every minute, tick a
+  // local clock and recompute status client-side via liveStatus(). Zero network; every actual
+  // data change still arrives through the useFramePush handlers above.
+  const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => { if (!document.hidden) loadAssets(); }, 60000);
-    return () => clearInterval(id);
+    const id = setInterval(() => { if (!document.hidden) setNow(Date.now()); }, 30000);
+    const onVis = () => { if (!document.hidden) setNow(Date.now()); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   if (state === null) return html`<div class="empty">Loading…</div>`;
@@ -132,8 +146,8 @@ function App() {
           ? html`<div class="empty"><i class="ph-light ph-books icon-md"></i>
               <div>${can_edit ? "No items yet — add the first one above." : "The library is empty."}</div></div>`
           : viewer.is_anon
-            ? html`<div class="public-list">${assets.map((a) => html`<${PublicRow} a=${a} key=${a._row_id} />`)}</div>`
-            : html`<div class="asset-list">${assets.map((a) => html`<${AssetRow} a=${a} can_edit=${can_edit} onAction=${setDialog} reload=${loadAssets} key=${a._row_id} />`)}</div>`
+            ? html`<div class="public-list">${assets.map((a) => html`<${PublicRow} a=${a} now=${now} key=${a._row_id} />`)}</div>`
+            : html`<div class="asset-list">${assets.map((a) => html`<${AssetRow} a=${a} now=${now} can_edit=${can_edit} onAction=${setDialog} reload=${loadAssets} key=${a._row_id} />`)}</div>`
       }
     </section>
 
@@ -170,14 +184,15 @@ function AddRow({ types, reload }) {
   `;
 }
 
-function PublicRow({ a }) {
+function PublicRow({ a, now }) {
+  const status = liveStatus(a, now);
   const due = a.due_at ? fmtDate(a.due_at) : "";
   let statusText = "available";
-  if (a.status === "checked_out") statusText = due ? `checked out · due ${due}` : "checked out";
-  else if (a.status === "overdue")  statusText = due ? `overdue · was due ${due}` : "overdue";
-  else if (a.status === "issue")    statusText = "unavailable";
+  if (status === "checked_out") statusText = due ? `checked out · due ${due}` : "checked out";
+  else if (status === "overdue")  statusText = due ? `overdue · was due ${due}` : "overdue";
+  else if (status === "issue")    statusText = "unavailable";
   return html`
-    <div class=${"public-row status-" + a.status}>
+    <div class=${"public-row status-" + status}>
       <span class="status-bar"></span>
       <div class="public-main">
         <div class="public-name">${a.name}</div>
@@ -187,17 +202,18 @@ function PublicRow({ a }) {
   `;
 }
 
-function AssetRow({ a, can_edit, onAction, reload }) {
+function AssetRow({ a, can_edit, onAction, reload, now }) {
+  const status = liveStatus(a, now);
   const checkedOut = !!a.checked_out_at;
   const borrower = a.checked_out_member_name || a.checked_out_manual_name || "";
   const due = a.due_at ? fmtDate(a.due_at) : "";
   const since = a.checked_out_at ? fmtDateTime(a.checked_out_at) : "";
 
   let statusLabel = "";
-  if (a.status === "available")        statusLabel = "in library";
-  else if (a.status === "checked_out") statusLabel = `out · due ${due}`;
-  else if (a.status === "overdue")     statusLabel = `overdue · was due ${due}`;
-  else if (a.status === "issue")       statusLabel = "needs attention";
+  if (status === "available")        statusLabel = "in library";
+  else if (status === "checked_out") statusLabel = `out · due ${due}`;
+  else if (status === "overdue")     statusLabel = `overdue · was due ${due}`;
+  else if (status === "issue")       statusLabel = "needs attention";
 
   async function checkin() {
     try { await api("api/asset/checkin", { row_id: a._row_id }); reload(); }
@@ -205,7 +221,7 @@ function AssetRow({ a, can_edit, onAction, reload }) {
   }
 
   return html`
-    <div class=${"asset status-" + a.status}>
+    <div class=${"asset status-" + status}>
       <span class="status-bar"></span>
       <div class="asset-main">
         <div class="asset-headline">
@@ -220,7 +236,7 @@ function AssetRow({ a, can_edit, onAction, reload }) {
         ${a.notes && html`<div class="asset-notes"><i class="ph-light ph-note icon-sm"></i> ${a.notes}</div>`}
       </div>
       <div class="asset-status">
-        <span class=${"status-chip status-" + a.status}><span class="dot"></span>${statusLabel}</span>
+        <span class=${"status-chip status-" + status}><span class="dot"></span>${statusLabel}</span>
       </div>
       ${can_edit && html`
         <div class="asset-actions">

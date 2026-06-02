@@ -2,10 +2,13 @@
 // This frame is a weather info/forecast app using the open-meteo keyless API.
 // Location is supplied per-request; data fields and units come from settings.json.
 // ----------------------------------------------------------------------------------------
-import { log, serveFileAtPath, osConfig, contentType, extname } from "@frame-core"; // must include @frame-core for tandem frame.
+import { log, serveFileAtPath, osConfig, contentType, extname, loadJsonFile } from "@frame-core"; // must include @frame-core for tandem frame.
 
-const settingsFileBuffer = await Deno.readFile(new URL("./data/settings.json", import.meta.url));
-const settings = JSON.parse(new TextDecoder().decode(settingsFileBuffer));
+// Settings live in data/settings.json, but the data dir may be empty on a fresh install.
+// loadJsonFile returns the fallback ({}) when the file is missing or malformed, so the
+// per-field `?? default` coalescing below supplies sensible defaults either way. Never read
+// the data dir directly at module scope — a rejected top-level await would crash the worker.
+const settings = loadJsonFile<Record<string, string | number>>(import.meta.url, "settings.json", {});
 
 // ----------------------------------------------------------------------------------------
 // WEATHER FETCH + PER-LOCATION 5-MINUTE CACHE
