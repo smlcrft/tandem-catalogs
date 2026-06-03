@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slideshow</title>
+  <link rel="stylesheet" href="/dynamic/frame-prefs.css">
+  <style>
+    :root { --ch: var(--os-c1); }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: var(--os-font-sans); background: var(--os-bg);
+      color: var(--os-text); font-size: var(--os-fs-base); overflow: hidden;
+    }
+
+    .app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+    /* ---- Top bar ---- */
+    .topbar {
+      display: flex; align-items: center; gap: var(--os-sp-xs); flex-wrap: wrap;
+      padding: var(--os-sp-xs) var(--os-sp-sm); border-bottom: 1px solid var(--os-border-color);
+      background: var(--os-bg-surface);
+    }
+    .brand { display: flex; align-items: center; gap: var(--os-sp-xs); margin-right: var(--os-sp-xs); }
+    .brand > i { font-size: 18px; color: var(--ch); }
+    .brand b { font-weight: var(--os-weight-semibold); font-size: var(--os-fs-base); }
+    .spacer { flex: 1 1 auto; }
+    .tdiv { width: 1px; align-self: stretch; background: var(--os-border-color); margin: 2px var(--os-sp-xs); }
+    .tbtn {
+      background: none; border: 0; cursor: pointer; color: var(--os-text-secondary);
+      width: 30px; height: 30px; padding: 0; border-radius: var(--os-radius-sm);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 17px; line-height: 0;
+      transition: color 150ms, background 150ms;
+    }
+    .tbtn:hover { color: var(--ch); background: var(--os-bg-subtle); }
+    .tbtn.on { color: var(--ch); background: var(--os-bg-subtle); }
+    .tbtn.primary { background: var(--ch); color: var(--ch-fg); }
+    .tbtn.primary:hover { opacity: 0.9; }
+    .tbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ---- Stage ---- */
+    .stagewrap {
+      position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden;
+      background: var(--os-bg-inset);
+      background-image: radial-gradient(var(--os-border-color) 0.75px, transparent 0.75px);
+      background-size: 14px 14px;
+    }
+    .stage {
+      position: absolute; left: 50%; top: 50%; transform-origin: center center;
+      box-shadow: var(--os-shadow-lg); user-select: none; overflow: hidden;
+    }
+    .el { position: absolute; }
+    .el.sel { z-index: 5; }
+    .el .bullets { list-style: disc; }
+    .el .bullets li::marker { color: currentColor; }
+    .imgph {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: var(--os-bg-inset); color: var(--os-text-subtle); font-family: var(--os-font-mono);
+      border: 1px dashed var(--os-border-color);
+    }
+    .handle {
+      position: absolute; background: var(--os-bg-surface); border: 1.5px solid var(--ch);
+      border-radius: 2px; z-index: 6;
+    }
+
+    /* ---- Inspector ---- */
+    .inspector {
+      position: absolute; left: 50%; bottom: var(--os-sp-sm); transform: translateX(-50%);
+      width: min(380px, calc(100% - 16px)); max-height: 52%; overflow: auto; z-index: 20;
+      background: var(--os-bg-surface); border: 1px solid var(--os-border-color);
+      border-radius: var(--os-radius-lg); box-shadow: var(--os-shadow-xl);
+      padding: var(--os-sp-sm); display: flex; flex-direction: column; gap: var(--os-sp-sm);
+    }
+    .ins-head { display: flex; align-items: center; gap: var(--os-sp-xs); }
+    .ins-head .lbl {
+      flex: 1; font-family: var(--os-font-mono); font-size: var(--os-fs-2xs);
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--os-text-muted);
+    }
+    .ins-row { display: flex; align-items: center; gap: var(--os-sp-xs); flex-wrap: wrap; }
+    .ins-row > .rlbl {
+      font-family: var(--os-font-mono); font-size: var(--os-fs-2xs); color: var(--os-text-muted);
+      width: 46px; flex: 0 0 auto;
+    }
+    .seg { display: inline-flex; border: 1px solid var(--os-border-color); border-radius: var(--os-radius-sm); overflow: hidden; }
+    .seg button {
+      background: var(--os-bg); border: 0; cursor: pointer; padding: 5px 8px; font: inherit;
+      font-size: var(--os-fs-sm); color: var(--os-text-secondary); line-height: 1;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .seg button + button { border-left: 1px solid var(--os-border-color); }
+    .seg button.active { background: var(--ch); color: var(--ch-fg); }
+    .seg.tiny button { padding: 5px 7px; }
+    .swatch {
+      width: 22px; height: 22px; border-radius: var(--os-radius-sm); cursor: pointer;
+      border: 1px solid var(--os-border-color); position: relative; flex: 0 0 auto;
+    }
+    .swatch.active { box-shadow: 0 0 0 2px var(--ch); border-color: var(--ch); }
+    .swatch.none::after {
+      content: ""; position: absolute; inset: 3px; border-top: 2px solid var(--os-cError);
+      transform: rotate(45deg); transform-origin: center;
+    }
+    .ins-row textarea {
+      width: 100%; min-height: 56px; font-size: var(--os-fs-sm); resize: vertical;
+      background: var(--os-bg); border: 1px solid var(--os-border-color); border-radius: var(--os-radius-sm);
+      padding: var(--os-sp-xs) var(--os-sp-sm); color: var(--os-text);
+    }
+    .ins-row textarea:focus { outline: none; border-color: var(--ch); background: var(--os-bg-surface); }
+    .numin { width: 58px; flex: 0 0 auto; padding: 5px 6px; font-size: var(--os-fs-sm); }
+    .ibtn {
+      background: var(--os-bg-subtle); border: 1px solid var(--os-border-color); cursor: pointer;
+      width: 28px; height: 28px; border-radius: var(--os-radius-sm); color: var(--os-text-secondary);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 0;
+    }
+    .ibtn:hover { color: var(--ch); }
+    .ibtn.danger:hover { color: var(--os-cError); border-color: var(--os-cError-muted); }
+
+    /* ---- Filmstrip ---- */
+    .filmstrip {
+      display: flex; align-items: center; gap: var(--os-sp-xs);
+      padding: var(--os-sp-xs) var(--os-sp-sm); border-top: 1px solid var(--os-border-color);
+      background: var(--os-bg-surface);
+    }
+    .slideops { display: flex; gap: 2px; flex: 0 0 auto; }
+    .thumbs { display: flex; gap: var(--os-sp-xs); overflow-x: auto; padding: 2px; flex: 1 1 auto; }
+    .thumb {
+      position: relative; flex: 0 0 auto; height: 50px; border-radius: var(--os-radius-xs);
+      overflow: hidden; cursor: pointer; border: 1.5px solid var(--os-border-color); background: var(--os-bg);
+    }
+    .thumb.active { border-color: var(--ch); box-shadow: 0 0 0 1.5px var(--ch); }
+    .thumb .tnum {
+      position: absolute; left: 2px; bottom: 1px; font-family: var(--os-font-mono);
+      font-size: 8px; color: var(--os-text-muted); background: color-mix(in srgb, var(--os-bg-surface) 80%, transparent);
+      padding: 0 3px; border-radius: 3px;
+    }
+
+    /* ---- Empty / CTA ---- */
+    .cta {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: var(--os-sp-sm); color: var(--os-text-muted); text-align: center; padding: var(--os-sp-lg);
+    }
+    .cta i { font-size: 34px; color: var(--ch); }
+    .cta .big { font-size: var(--os-fs-md); color: var(--os-text); }
+    .cta button {
+      background: var(--ch); color: var(--ch-fg); border: 0; border-radius: var(--os-radius-sm);
+      padding: var(--os-sp-sm) var(--os-sp-md); cursor: pointer; font: inherit; font-weight: var(--os-weight-medium);
+    }
+
+    /* ---- Viewer browse bar ---- */
+    .viewerbar {
+      display: flex; align-items: center; justify-content: center; gap: var(--os-sp-sm);
+      padding: var(--os-sp-xs) var(--os-sp-sm); border-top: 1px solid var(--os-border-color);
+      background: var(--os-bg-surface);
+    }
+    .viewerbar .pcount { font-family: var(--os-font-mono); font-size: var(--os-fs-sm); color: var(--os-text-muted); min-width: 54px; text-align: center; }
+
+    /* ---- Present mode ---- */
+    .present { position: fixed; inset: 0; z-index: 100; background: #0e0d0c; display: flex; }
+    .present .stagewrap { background: transparent; background-image: none; }
+    .pexit {
+      position: absolute; top: 10px; right: 10px; z-index: 110; width: 36px; height: 36px;
+      border-radius: var(--os-radius-full); border: 0; cursor: pointer; font-size: 18px; line-height: 0;
+      background: color-mix(in srgb, #fff 14%, transparent); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .pexit:hover { background: color-mix(in srgb, #fff 26%, transparent); }
+    .pcount-fixed {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 110;
+      font-family: var(--os-font-mono); font-size: var(--os-fs-sm); color: rgba(255,255,255,0.75);
+      background: color-mix(in srgb, #fff 10%, transparent); padding: 3px 10px; border-radius: var(--os-radius-full);
+    }
+    .pnav {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 110; width: 40px; height: 56px;
+      border: 0; cursor: pointer; font-size: 22px; line-height: 0; border-radius: var(--os-radius-md);
+      background: color-mix(in srgb, #fff 8%, transparent); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .pnav:hover { background: color-mix(in srgb, #fff 20%, transparent); }
+    .pnav:disabled { opacity: 0; pointer-events: none; }
+    .pnav.left { left: 10px; } .pnav.right { right: 10px; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import {
+      frame, html, render, useState, useEffect, useRef, useLayoutEffect, useFramePush, Overlay,
+    } from "/lib/js/framelib.js";
+
+    // ---- constants & helpers ----------------------------------------------------------
+    const ASPECTS = { "16:9": [1280, 720], "4:3": [1200, 900], "1:1": [960, 960] };
+    const TEXT_COLORS = { text: "var(--os-text)", secondary: "var(--os-text-secondary)", muted: "var(--os-text-muted)", accent: "var(--ch)", accentfg: "var(--ch-fg)", white: "#ffffff" };
+    const FILL_COLORS = { accent: "var(--ch)", accentmuted: "var(--ch-muted)", text: "var(--os-text)", muted: "var(--os-text-muted)", white: "#ffffff", none: "transparent" };
+    const SLIDE_BG = { paper: "var(--os-bg)", white: "var(--os-bg-surface)", dark: "#1c1917", accent: "var(--ch)", accentmuted: "var(--ch-muted)" };
+    const PALETTES = ["c1","c2","c3","c4","c5","c6","c7","c8","c9","c10","c11","c12"];
+    const SESSION = Math.random().toString(36).slice(2);
+
+    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+    const clone = (o) => JSON.parse(JSON.stringify(o));   // deck is pure JSON — avoids structuredClone gaps in older webviews
+    function genId() { let s = ""; for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16); return s; }
+    function withSfi(p) {
+      try {
+        const sfi = new URLSearchParams(location.search).get("sfi");
+        if (sfi && !/[?&]sfi=/.test(p)) return p + (p.includes("?") ? "&" : "?") + "sfi=" + encodeURIComponent(sfi);
+      } catch (_) {}
+      return p;
+    }
+    function paletteVars(show) {
+      const p = show.settings.palette;
+      return { "--ch": `var(--os-${p})`, "--ch-fg": `var(--os-${p}-fg)`, "--ch-muted": `var(--os-${p}-muted)` };
+    }
+    function dims(show) { return ASPECTS[show.settings.aspect] || ASPECTS["16:9"]; }
+    function slideBgCss(show, slide) {
+      const key = !slide || slide.background === "inherit" ? show.settings.background : slide.background;
+      return SLIDE_BG[key] || SLIDE_BG.paper;
+    }
+
+    function blankSlide() { return { id: genId(), background: "inherit", elements: [] }; }
+    const TEXT_PRESET = {
+      heading:    { size: 64, weight: 700, h: 130, text: "Heading", align: "center" },
+      subheading: { size: 40, weight: 600, h: 90,  text: "Subheading", align: "center" },
+      body:       { size: 28, weight: 400, h: 150, text: "Body text. Double-click to edit.", align: "left" },
+      bullets:    { size: 28, weight: 400, h: 210, text: "First point\nSecond point\nThird point", align: "left" },
+      caption:    { size: 18, weight: 400, h: 48,  text: "Caption", align: "left" },
+    };
+    function freshText(style, W, H, count) {
+      const p = TEXT_PRESET[style] || TEXT_PRESET.body, w = Math.round(W * 0.8);
+      return { id: genId(), type: "text", x: Math.round((W - w) / 2), y: clamp(70 + (count % 5) * 26, 40, H - p.h - 40),
+        w, h: p.h, text: p.text, style, align: p.align, color: "text", size: p.size, weight: p.weight };
+    }
+    function freshImage(imageId, W, H, count) {
+      const w = Math.round(W * 0.45), h = Math.round(w * 0.66);
+      return { id: genId(), type: "image", x: Math.round((W - w) / 2), y: clamp(80 + (count % 5) * 26, 40, H - h - 40), w, h, imageId, fit: "contain", radius: 0 };
+    }
+    function freshShape(shape, W, H, count) {
+      const w = 280, h = shape === "ellipse" ? 200 : 170;
+      return { id: genId(), type: "shape", x: Math.round((W - w) / 2), y: clamp(90 + (count % 5) * 26, 40, H - h - 40), w, h, shape, fill: "accent", radius: shape === "rect" ? 16 : 0 };
+    }
+
+    // ---- element rendering ------------------------------------------------------------
+    function ElementInner(el) {
+      if (el.type === "text") {
+        const color = TEXT_COLORS[el.color] || "var(--os-text)";
+        const base = { fontSize: el.size + "px", fontWeight: el.weight, lineHeight: 1.18, color,
+          textAlign: el.align, width: "100%", height: "100%", margin: 0, fontFamily: "var(--os-font-sans)" };
+        if (el.style === "bullets") {
+          const items = (el.text || "").split("\n").filter((l) => l.length);
+          return html`<ul class="bullets" style=${{ ...base, paddingLeft: "1.1em", overflow: "visible" }}>
+            ${items.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>`;
+        }
+        return html`<div style=${{ ...base, whiteSpace: "pre-wrap", overflow: "visible", wordBreak: "break-word" }}>${el.text || ""}</div>`;
+      }
+      if (el.type === "image") {
+        if (!el.imageId) return html`<div class="imgph">no image</div>`;
+        return html`<img src=${withSfi("api/image/" + el.imageId)} draggable=${false}
+          style=${{ width: "100%", height: "100%", objectFit: el.fit, display: "block" }} />`;
+      }
+      // shape
+      const st = { width: "100%", height: "100%" };
+      if (el.shape === "ellipse") st.borderRadius = "50%";
+      else if (el.shape === "line") { st.height = Math.max(6, el.radius || 6) + "px"; st.alignSelf = "center"; }
+      else st.borderRadius = (el.radius || 0) + "px";
+      if (el.fill === "none") { st.background = "transparent"; st.border = "4px solid var(--ch)"; }
+      else st.background = FILL_COLORS[el.fill] || "var(--ch)";
+      if (el.shape === "line") return html`<div style=${{ width: "100%", height: "100%", display: "flex", alignItems: "center" }}><div style=${st}></div></div>`;
+      return html`<div style=${st}></div>`;
+    }
+
+    const HANDLES = [
+      ["nw", 0, 0, "nwse-resize"], ["n", 0.5, 0, "ns-resize"], ["ne", 1, 0, "nesw-resize"],
+      ["e", 1, 0.5, "ew-resize"], ["se", 1, 1, "nwse-resize"], ["s", 0.5, 1, "ns-resize"],
+      ["sw", 0, 1, "nesw-resize"], ["w", 0, 0.5, "ew-resize"],
+    ];
+
+    function Stage({ show, slide, interactive, selectedId, scaleRef, onElDown, onHandleDown, onBgDown, onElDbl }) {
+      const wrapRef = useRef(null);
+      const [scale, setScale] = useState(0);
+      const [W, H] = dims(show);
+
+      useLayoutEffect(() => {
+        const wrap = wrapRef.current; if (!wrap) return;
+        const recompute = () => {
+          const r = wrap.getBoundingClientRect();
+          const s = Math.min(r.width / W, r.height / H);
+          if (Number.isFinite(s) && s > 0) { setScale(s); if (scaleRef) scaleRef.current = s; }
+        };
+        recompute();
+        const ro = new ResizeObserver(recompute); ro.observe(wrap);
+        return () => ro.disconnect();
+      }, [W, H]);
+
+      const stageStyle = {
+        width: W + "px", height: H + "px",
+        transform: `translate(-50%, -50%) scale(${scale || 0.0001})`,
+        background: slideBgCss(show, slide), ...paletteVars(show),
+      };
+
+      return html`<div class="stagewrap" ref=${wrapRef}>
+        <div class="stage" style=${stageStyle}
+          onPointerDown=${interactive ? (e) => { if (e.target.classList.contains("stage")) onBgDown && onBgDown(); } : null}>
+          ${slide ? slide.elements.map((el) => {
+            const sel = interactive && selectedId === el.id;
+            const hsz = clamp(11 / (scale || 1), 4, 64);
+            const wrapStyle = { left: el.x + "px", top: el.y + "px", width: el.w + "px", height: el.h + "px" };
+            if (el.type === "image" || el.type === "shape") { wrapStyle.overflow = "hidden"; if (el.type === "image") wrapStyle.borderRadius = (el.radius || 0) + "px"; }
+            if (sel) wrapStyle.outline = `${clamp(1.5 / (scale || 1), 0.5, 8)}px solid var(--ch)`;
+            if (interactive) wrapStyle.cursor = "move";
+            return html`<div class="el ${sel ? "sel" : ""}" key=${el.id} style=${wrapStyle}
+              onPointerDown=${interactive ? (e) => onElDown(e, el) : null}
+              onDblClick=${interactive && el.type === "text" ? (e) => { e.stopPropagation(); onElDbl(el); } : null}>
+              ${ElementInner(el)}
+              ${sel ? HANDLES.map(([h, fx, fy, cur]) => html`<div class="handle" key=${h}
+                  style=${{ left: `calc(${fx * 100}% - ${hsz / 2}px)`, top: `calc(${fy * 100}% - ${hsz / 2}px)`, width: hsz + "px", height: hsz + "px", cursor: cur }}
+                  onPointerDown=${(e) => onHandleDown(e, el, h)}></div>`) : null}
+            </div>`;
+          }) : null}
+        </div>
+      </div>`;
+    }
+
+    // ---- swatches ---------------------------------------------------------------------
+    function Swatches({ map, keys, value, onPick }) {
+      return html`<div class="ins-row" style=${{ gap: "6px" }}>
+        ${keys.map((k) => html`<div key=${k} title=${k}
+          class=${"swatch" + (value === k ? " active" : "") + (k === "none" ? " none" : "")}
+          style=${{ background: map[k] }} onClick=${() => onPick(k)}></div>`)}
+      </div>`;
+    }
+
+    // ---- inspector --------------------------------------------------------------------
+    function Inspector({ el, patch, onClose, onDelete, onDup, onFwd, onBack, focusReq }) {
+      const ta = useRef(null);
+      useEffect(() => { if (el.type === "text" && focusReq && ta.current) { ta.current.focus(); } }, [focusReq]);
+      return html`<div class="inspector">
+        <div class="ins-head">
+          <span class="lbl">${el.type}</span>
+          <button class="ibtn" title="Send backward" onClick=${onBack}><i class="ph-light ph-arrow-line-down"></i></button>
+          <button class="ibtn" title="Bring forward" onClick=${onFwd}><i class="ph-light ph-arrow-line-up"></i></button>
+          <button class="ibtn" title="Duplicate" onClick=${onDup}><i class="ph-light ph-copy"></i></button>
+          <button class="ibtn danger" title="Delete" onClick=${onDelete}><i class="ph-light ph-trash-simple"></i></button>
+          <button class="ibtn" title="Close" onClick=${onClose}><i class="ph-light ph-x"></i></button>
+        </div>
+
+        ${el.type === "text" ? html`
+          <div class="ins-row">
+            <textarea ref=${ta} value=${el.text} placeholder="Type here…"
+              onInput=${(e) => patch({ text: e.target.value })}></textarea>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">style</span>
+            <select value=${el.style} onChange=${(e) => {
+              const s = e.target.value, p = TEXT_PRESET[s] || TEXT_PRESET.body;
+              patch({ style: s, size: p.size, weight: p.weight });
+            }} style=${{ width: "auto", flex: "1" }}>
+              <option value="heading">Heading</option>
+              <option value="subheading">Subheading</option>
+              <option value="body">Body</option>
+              <option value="bullets">Bullet list</option>
+              <option value="caption">Caption</option>
+            </select>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">align</span>
+            <div class="seg tiny">
+              ${["left", "center", "right"].map((a) => html`<button key=${a} class=${el.align === a ? "active" : ""}
+                onClick=${() => patch({ align: a })}><i class="ph-light ph-text-align-${a}"></i></button>`)}
+            </div>
+            <span class="rlbl">size</span>
+            <button class="ibtn" onClick=${() => patch({ size: clamp((el.size || 28) - 4, 6, 400) })}>−</button>
+            <input class="numin" type="number" value=${el.size} min="6" max="400"
+              onChange=${(e) => patch({ size: clamp(parseInt(e.target.value) || 28, 6, 400) })} />
+            <button class="ibtn" onClick=${() => patch({ size: clamp((el.size || 28) + 4, 6, 400) })}>+</button>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">color</span>
+            <${Swatches} map=${TEXT_COLORS} keys=${["text","secondary","muted","accent","accentfg","white"]} value=${el.color} onPick=${(k) => patch({ color: k })} />
+          </div>
+        ` : null}
+
+        ${el.type === "image" ? html`
+          <div class="ins-row">
+            <span class="rlbl">fit</span>
+            <div class="seg tiny">
+              <button class=${el.fit === "contain" ? "active" : ""} onClick=${() => patch({ fit: "contain" })}>Contain</button>
+              <button class=${el.fit === "cover" ? "active" : ""} onClick=${() => patch({ fit: "cover" })}>Cover</button>
+            </div>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">corners</span>
+            <input type="range" min="0" max="120" value=${el.radius || 0} style=${{ flex: "1" }}
+              onInput=${(e) => patch({ radius: parseInt(e.target.value) || 0 })} />
+          </div>
+        ` : null}
+
+        ${el.type === "shape" ? html`
+          <div class="ins-row">
+            <span class="rlbl">shape</span>
+            <div class="seg tiny">
+              ${[["rect","ph-square"],["ellipse","ph-circle"],["line","ph-minus"]].map(([s, ic]) => html`<button key=${s}
+                class=${el.shape === s ? "active" : ""} onClick=${() => patch({ shape: s })}><i class="ph-light ${ic}"></i></button>`)}
+            </div>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">fill</span>
+            <${Swatches} map=${FILL_COLORS} keys=${["accent","accentmuted","text","muted","white","none"]} value=${el.fill} onPick=${(k) => patch({ fill: k })} />
+          </div>
+          ${el.shape !== "ellipse" ? html`<div class="ins-row">
+            <span class="rlbl">${el.shape === "line" ? "weight" : "corners"}</span>
+            <input type="range" min="0" max="120" value=${el.radius || 0} style=${{ flex: "1" }}
+              onInput=${(e) => patch({ radius: parseInt(e.target.value) || 0 })} />
+          </div>` : null}
+        ` : null}
+      </div>`;
+    }
+
+    // ---- settings sheet ---------------------------------------------------------------
+    function SettingsSheet({ show, slide, onClose, setSettings, setSlideBg }) {
+      const s = show.settings;
+      return html`<${Overlay} onClose=${onClose}>
+        <div class="inspector" style=${{ position: "relative", left: "auto", bottom: "auto", transform: "none", maxHeight: "80vh", width: "min(360px, 92vw)", ...paletteVars(show) }}
+          onClick=${(e) => e.stopPropagation()}>
+          <div class="ins-head"><span class="lbl">show settings</span>
+            <button class="ibtn" title="Close" onClick=${onClose}><i class="ph-light ph-x"></i></button>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">palette</span>
+            <div class="ins-row" style=${{ gap: "6px" }}>
+              ${PALETTES.map((p) => html`<div key=${p} title=${p}
+                class=${"swatch" + (s.palette === p ? " active" : "")} style=${{ background: `var(--os-${p})` }}
+                onClick=${() => setSettings({ palette: p })}></div>`)}
+            </div>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">backdrop</span>
+            <div class="seg tiny">
+              ${[["paper","Paper"],["white","White"],["dark","Dark"],["accent","Accent"],["accentmuted","Soft"]].map(([k, lbl]) => html`<button key=${k}
+                class=${s.background === k ? "active" : ""} onClick=${() => setSettings({ background: k })}>${lbl}</button>`)}
+            </div>
+          </div>
+          <div class="ins-row">
+            <span class="rlbl">aspect</span>
+            <div class="seg tiny">
+              ${["16:9","4:3","1:1"].map((a) => html`<button key=${a} class=${s.aspect === a ? "active" : ""}
+                onClick=${() => setSettings({ aspect: a })}>${a}</button>`)}
+            </div>
+          </div>
+          ${slide ? html`<div class="ins-row">
+            <span class="rlbl">this slide</span>
+            <select value=${slide.background} onChange=${(e) => setSlideBg(e.target.value)} style=${{ width: "auto", flex: "1" }}>
+              <option value="inherit">Use backdrop</option>
+              <option value="paper">Paper</option>
+              <option value="white">White</option>
+              <option value="dark">Dark</option>
+              <option value="accent">Accent</option>
+              <option value="accentmuted">Soft accent</option>
+            </select>
+          </div>` : null}
+        </div>
+      </${Overlay}>`;
+    }
+
+    // ---- main app ---------------------------------------------------------------------
+    function App() {
+      const [me, setMe] = useState(null);
+      const [show, setShow] = useState(null);
+      const [cur, setCur] = useState(0);
+      const [selectedId, setSelectedId] = useState(null);
+      const [present, setPresent] = useState(false);
+      const [showSettings, setShowSettings] = useState(false);
+      const [focusReq, setFocusReq] = useState(0);
+
+      const showRef = useRef(null);
+      const curRef = useRef(0);
+      const scaleRef = useRef(1);
+      const busyRef = useRef(false);
+      const staleRef = useRef(false);
+      const saveTimer = useRef(null);
+      const fileInput = useRef(null);
+      useEffect(() => { showRef.current = show; }, [show]);
+      useEffect(() => { curRef.current = cur; }, [cur]);
+
+      async function refresh() {
+        const s = await frame.api("api/state").catch(() => null);
+        if (!s) return;
+        setMe(s.me); setShow(s.show); showRef.current = s.show;
+        setCur((c) => clamp(c, 0, Math.max(0, s.show.slides.length - 1)));
+      }
+      useEffect(() => { refresh(); }, []);
+
+      useFramePush({ deck_changed: (data) => {
+        if (data && data.by === SESSION) return;
+        const tag = (document.activeElement && document.activeElement.tagName) || "";
+        const typing = tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT";
+        if (busyRef.current || typing) { staleRef.current = true; return; }
+        refresh();
+      } });
+
+      function endInteraction() {
+        busyRef.current = false;
+        if (staleRef.current) { staleRef.current = false; refresh(); }
+      }
+
+      // keyboard nav (present mode, and read-only browsing for viewers)
+      useEffect(() => {
+        const isEditor = me && me.is_sfi_editor;
+        function onKey(e) {
+          const tag = (document.activeElement && document.activeElement.tagName) || "";
+          const typing = tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT";
+          if (present) {
+            if (e.key === "Escape") exitPresent();
+            else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); nav(1); }
+            else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); nav(-1); }
+          } else if (!isEditor && !typing) {
+            if (e.key === "ArrowRight") nav(1); else if (e.key === "ArrowLeft") nav(-1);
+          }
+        }
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      });
+
+      // sync present flag if user exits browser fullscreen
+      useEffect(() => {
+        function onFs() { if (!document.fullscreenElement && present) setPresent(false); }
+        document.addEventListener("fullscreenchange", onFs);
+        return () => document.removeEventListener("fullscreenchange", onFs);
+      }, [present]);
+
+      if (!show || !me) return html`<div></div>`;
+      const isEditor = me.is_sfi_editor;
+      const slides = show.slides;
+      const curIdx = clamp(cur, 0, Math.max(0, slides.length - 1));
+      const slide = slides[curIdx] || null;
+      const selEl = slide ? slide.elements.find((e) => e.id === selectedId) : null;
+      const [W, H] = dims(show);
+
+      // ---- persistence ----
+      function scheduleSave() {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+          frame.api("api/save", { show: showRef.current, by: SESSION }).catch(() => {});
+        }, 300);
+      }
+      function commit(next, save = true) { showRef.current = next; setShow(next); if (save) scheduleSave(); }
+
+      // ---- slide ops ----
+      function addSlide() {
+        const next = clone(showRef.current);
+        const at = next.slides.length ? Math.min(curRef.current + 1, next.slides.length) : 0;
+        next.slides.splice(at, 0, blankSlide());
+        commit(next); setCur(at); setSelectedId(null);
+      }
+      function dupSlide() {
+        if (!slide) return;
+        const next = clone(showRef.current);
+        const copy = clone(next.slides[curIdx]);
+        copy.id = genId(); copy.elements.forEach((e) => (e.id = genId()));
+        next.slides.splice(curIdx + 1, 0, copy);
+        commit(next); setCur(curIdx + 1); setSelectedId(null);
+      }
+      function delSlide() {
+        if (!slide) return;
+        const next = clone(showRef.current);
+        next.slides.splice(curIdx, 1);
+        commit(next); setCur(clamp(curIdx, 0, Math.max(0, next.slides.length - 1))); setSelectedId(null);
+      }
+      function moveSlide(dir) {
+        const j = curIdx + dir;
+        if (j < 0 || j >= slides.length) return;
+        const next = clone(showRef.current);
+        const [m] = next.slides.splice(curIdx, 1); next.slides.splice(j, 0, m);
+        commit(next); setCur(j);
+      }
+      function setSlideBg(bg) {
+        const next = clone(showRef.current);
+        if (next.slides[curIdx]) next.slides[curIdx].background = bg;
+        commit(next);
+      }
+      function setSettings(patch) {
+        const next = clone(showRef.current);
+        next.settings = { ...next.settings, ...patch };
+        commit(next);
+      }
+
+      // ---- element ops ----
+      function addElement(maker) {
+        const next = clone(showRef.current);
+        if (!next.slides.length) next.slides.splice(0, 0, blankSlide());
+        const idx = Math.min(curRef.current, next.slides.length - 1);
+        const el = maker(next.slides[idx].elements.length);
+        next.slides[idx].elements.push(el);
+        commit(next); setCur(idx); setSelectedId(el.id);
+        if (el.type === "text") setFocusReq((n) => n + 1);
+      }
+      function patchEl(id, patch) {
+        const next = clone(showRef.current);
+        const els = next.slides[curIdx] && next.slides[curIdx].elements;
+        if (!els) return;
+        const el = els.find((e) => e.id === id); if (!el) return;
+        Object.assign(el, patch);
+        commit(next);
+      }
+      function deleteEl(id) {
+        const next = clone(showRef.current);
+        const sl = next.slides[curIdx]; if (!sl) return;
+        sl.elements = sl.elements.filter((e) => e.id !== id);
+        commit(next); setSelectedId(null);
+      }
+      function dupEl(id) {
+        const next = clone(showRef.current);
+        const sl = next.slides[curIdx]; if (!sl) return;
+        const i = sl.elements.findIndex((e) => e.id === id); if (i < 0) return;
+        const copy = clone(sl.elements[i]); copy.id = genId();
+        copy.x = clamp(copy.x + 24, 0, W - 20); copy.y = clamp(copy.y + 24, 0, H - 20);
+        sl.elements.splice(i + 1, 0, copy);
+        commit(next); setSelectedId(copy.id);
+      }
+      function reorderEl(id, dir) {
+        const next = clone(showRef.current);
+        const sl = next.slides[curIdx]; if (!sl) return;
+        const i = sl.elements.findIndex((e) => e.id === id), j = i + dir;
+        if (i < 0 || j < 0 || j >= sl.elements.length) return;
+        const [m] = sl.elements.splice(i, 1); sl.elements.splice(j, 0, m);
+        commit(next);
+      }
+
+      // ---- drag / resize ----
+      function beginInteract(e, el, mode, handle) {
+        if (present || !isEditor) return;
+        e.preventDefault(); e.stopPropagation();
+        setSelectedId(el.id);
+        busyRef.current = true;
+        const sx = e.clientX, sy = e.clientY, o = { x: el.x, y: el.y, w: el.w, h: el.h };
+        function mv(ev) {
+          const sc = scaleRef.current || 1;
+          const dx = (ev.clientX - sx) / sc, dy = (ev.clientY - sy) / sc;
+          let g;
+          if (mode === "move") {
+            g = { x: clamp(Math.round(o.x + dx), -o.w + 24, W - 24), y: clamp(Math.round(o.y + dy), -o.h + 24, H - 24) };
+          } else {
+            let nx = o.x, ny = o.y, nw = o.w, nh = o.h;
+            if (handle.includes("e")) nw = Math.max(20, o.w + dx);
+            if (handle.includes("s")) nh = Math.max(20, o.h + dy);
+            if (handle.includes("w")) { nw = Math.max(20, o.w - dx); nx = o.x + (o.w - nw); }
+            if (handle.includes("n")) { nh = Math.max(20, o.h - dy); ny = o.y + (o.h - nh); }
+            g = { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) };
+          }
+          patchElLocal(el.id, g);
+        }
+        function up() {
+          window.removeEventListener("pointermove", mv);
+          window.removeEventListener("pointerup", up);
+          scheduleSave(); endInteraction();
+        }
+        window.addEventListener("pointermove", mv);
+        window.addEventListener("pointerup", up);
+      }
+      // like patchEl but without scheduling a save on every move frame
+      function patchElLocal(id, patch) {
+        const next = clone(showRef.current);
+        const els = next.slides[curRef.current] && next.slides[curRef.current].elements;
+        if (!els) return;
+        const el = els.find((e) => e.id === id); if (!el) return;
+        Object.assign(el, patch);
+        commit(next, false);
+      }
+
+      // ---- image upload (modeled on file_folder; validated + resized client-side) ----
+      const MAX_DIM = 2048, MAX_BYTES = 4 * 1024 * 1024;
+      async function onPickImage(file) {
+        if (!file) return;
+        if (!/^image\//.test(file.type)) { await frame.alert("Please choose an image file."); return; }
+        try {
+          const { blob, ext } = await prepImage(file);
+          if (blob.size > 8 * 1024 * 1024) { await frame.alert("That image is too large even after resizing."); return; }
+          const buf = await blob.arrayBuffer();
+          const res = await frame.fetch(withSfi("api/upload?ext=" + encodeURIComponent(ext)), { method: "POST", body: buf });
+          if (!res.ok) { const m = await res.json().catch(() => ({})); await frame.alert(m.error || ("Upload failed (" + res.status + ")")); return; }
+          const { imageId } = await res.json();
+          addElement((c) => freshImage(imageId, W, H, c));
+        } catch (_) { await frame.alert("Could not read that image."); }
+      }
+      function prepImage(file) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(file);
+          const img = new Image();
+          img.onload = () => {
+            const big = img.naturalWidth > MAX_DIM || img.naturalHeight > MAX_DIM;
+            const origExt = ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" })[file.type];
+            // Small enough and a known type → keep original bytes (preserves gifs / transparency).
+            if (!big && file.size <= MAX_BYTES && origExt) {
+              URL.revokeObjectURL(url);
+              resolve({ blob: file, ext: origExt });
+              return;
+            }
+            const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+            const cw = Math.max(1, Math.round(img.naturalWidth * scale)), chh = Math.max(1, Math.round(img.naturalHeight * scale));
+            const cv = document.createElement("canvas"); cv.width = cw; cv.height = chh;
+            cv.getContext("2d").drawImage(img, 0, 0, cw, chh);
+            const alpha = file.type === "image/png" || file.type === "image/webp";
+            const type = alpha ? "image/png" : "image/jpeg";
+            cv.toBlob((b) => {
+              URL.revokeObjectURL(url);
+              if (!b) { reject(new Error("encode failed")); return; }
+              resolve({ blob: b, ext: alpha ? "png" : "jpg" });
+            }, type, 0.9);
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode failed")); };
+          img.src = url;
+        });
+      }
+
+      // ---- present ----
+      function enterPresent() { setSelectedId(null); setPresent(true); try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (_) {} }
+      function exitPresent() { setPresent(false); try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {} }
+      function nav(dir) { setCur((c) => clamp(c + dir, 0, Math.max(0, showRef.current.slides.length - 1))); }
+
+      // ================= PRESENT MODE =================
+      if (present) {
+        return html`<div class="present" onClick=${() => nav(1)}>
+          <${Stage} show=${show} slide=${slide} interactive=${false} />
+          <button class="pexit" title="Exit (Esc)" onClick=${(e) => { e.stopPropagation(); exitPresent(); }}><i class="ph-light ph-x"></i></button>
+          <button class="pnav left" disabled=${curIdx === 0} onClick=${(e) => { e.stopPropagation(); nav(-1); }}><i class="ph-light ph-caret-left"></i></button>
+          <button class="pnav right" disabled=${curIdx >= slides.length - 1} onClick=${(e) => { e.stopPropagation(); nav(1); }}><i class="ph-light ph-caret-right"></i></button>
+          <div class="pcount-fixed">${slides.length ? curIdx + 1 : 0} / ${slides.length}</div>
+        </div>`;
+      }
+
+      const canPresent = slides.length > 0;
+
+      // ================= VIEWER (read-only) =================
+      if (!isEditor) {
+        return html`<div class="app" style=${paletteVars(show)}>
+          <div class="topbar">
+            <div class="brand"><i class="ph-light ph-projector-screen"></i><b>Slideshow</b></div>
+            <div class="spacer"></div>
+            <button class="tbtn primary" title="Present" disabled=${!canPresent} onClick=${enterPresent}><i class="ph-light ph-play"></i></button>
+          </div>
+          ${slides.length ? html`
+            <${Stage} show=${show} slide=${slide} interactive=${false} />
+            <div class="viewerbar">
+              <button class="tbtn" disabled=${curIdx === 0} onClick=${() => nav(-1)}><i class="ph-light ph-caret-left"></i></button>
+              <span class="pcount">${curIdx + 1} / ${slides.length}</span>
+              <button class="tbtn" disabled=${curIdx >= slides.length - 1} onClick=${() => nav(1)}><i class="ph-light ph-caret-right"></i></button>
+            </div>`
+          : html`<div class="stagewrap"><div class="cta"><i class="ph-light ph-projector-screen"></i><span class="big">No slides yet.</span></div></div>`}
+        </div>`;
+      }
+
+      // ================= EDITOR =================
+      return html`<div class="app" style=${paletteVars(show)}>
+        <div class="topbar">
+          <div class="brand"><i class="ph-light ph-projector-screen"></i><b>Slideshow</b></div>
+          <div class="tdiv"></div>
+          <button class="tbtn" title="Add heading" onClick=${() => addElement((c) => freshText("heading", W, H, c))}><i class="ph-light ph-text-h-one"></i></button>
+          <button class="tbtn" title="Add text" onClick=${() => addElement((c) => freshText("body", W, H, c))}><i class="ph-light ph-text-t"></i></button>
+          <button class="tbtn" title="Add bullet list" onClick=${() => addElement((c) => freshText("bullets", W, H, c))}><i class="ph-light ph-list-bullets"></i></button>
+          <button class="tbtn" title="Add image" onClick=${() => fileInput.current && fileInput.current.click()}><i class="ph-light ph-image"></i></button>
+          <button class="tbtn" title="Add rectangle" onClick=${() => addElement((c) => freshShape("rect", W, H, c))}><i class="ph-light ph-square"></i></button>
+          <button class="tbtn" title="Add ellipse" onClick=${() => addElement((c) => freshShape("ellipse", W, H, c))}><i class="ph-light ph-circle"></i></button>
+          <div class="spacer"></div>
+          <button class="tbtn ${showSettings ? "on" : ""}" title="Show settings" onClick=${() => setShowSettings(true)}><i class="ph-light ph-gear-six"></i></button>
+          <button class="tbtn primary" title="Present" disabled=${!canPresent} onClick=${enterPresent}><i class="ph-light ph-play"></i></button>
+          <input ref=${fileInput} type="file" accept="image/*" style="display:none"
+            onChange=${(e) => { onPickImage(e.target.files[0]); e.target.value = ""; }} />
+        </div>
+
+        ${slide ? html`
+          <${Stage} show=${show} slide=${slide} interactive=${true} selectedId=${selectedId} scaleRef=${scaleRef}
+            onBgDown=${() => setSelectedId(null)}
+            onElDown=${(e, el) => beginInteract(e, el, "move")}
+            onHandleDown=${(e, el, h) => beginInteract(e, el, "resize", h)}
+            onElDbl=${(el) => { setSelectedId(el.id); setFocusReq((n) => n + 1); }} />
+        ` : html`<div class="stagewrap"><div class="cta">
+            <i class="ph-light ph-plus-square"></i>
+            <span class="big">Start your presentation</span>
+            <button onClick=${addSlide}>Add a slide</button>
+          </div></div>`}
+
+        ${selEl ? html`<${Inspector} el=${selEl}
+          patch=${(p) => patchEl(selEl.id, p)}
+          onClose=${() => setSelectedId(null)}
+          onDelete=${() => deleteEl(selEl.id)}
+          onDup=${() => dupEl(selEl.id)}
+          onFwd=${() => reorderEl(selEl.id, 1)}
+          onBack=${() => reorderEl(selEl.id, -1)}
+          focusReq=${focusReq} />` : null}
+
+        <div class="filmstrip">
+          <div class="slideops">
+            <button class="tbtn" title="Add slide" onClick=${addSlide}><i class="ph-light ph-plus"></i></button>
+            <button class="tbtn" title="Duplicate slide" disabled=${!slide} onClick=${dupSlide}><i class="ph-light ph-copy"></i></button>
+            <button class="tbtn" title="Move left" disabled=${curIdx <= 0} onClick=${() => moveSlide(-1)}><i class="ph-light ph-caret-left"></i></button>
+            <button class="tbtn" title="Move right" disabled=${curIdx >= slides.length - 1} onClick=${() => moveSlide(1)}><i class="ph-light ph-caret-right"></i></button>
+            <button class="tbtn" title="Delete slide" disabled=${!slide} onClick=${delSlide}><i class="ph-light ph-trash-simple"></i></button>
+          </div>
+          <div class="thumbs">
+            ${slides.map((sl, i) => {
+              const tw = Math.round(50 * (W / H));
+              return html`<div key=${sl.id} class=${"thumb" + (i === curIdx ? " active" : "")}
+                style=${{ width: tw + "px" }} onClick=${() => { setCur(i); setSelectedId(null); }}>
+                <${Stage} show=${show} slide=${sl} interactive=${false} />
+                <span class="tnum">${i + 1}</span>
+              </div>`;
+            })}
+          </div>
+        </div>
+
+        ${showSettings ? html`<${SettingsSheet} show=${show} slide=${slide}
+          onClose=${() => setShowSettings(false)} setSettings=${setSettings} setSlideBg=${setSlideBg} />` : null}
+      </div>`;
+    }
+
+    render(html`<${App}/>`, document.body);
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+    "name": "Slideshow",
+    "description": "A simple presentation maker and presenter, unique per placement. Space editors build a deck of slides — stylized text (headings, body, bullet lists), uploaded images, and shapes — laid out freely on a fixed slide canvas; everything is positioned and sized proportionally so the deck looks identical from a 300×300 tile up to a scaled-up fullscreen presentation. Viewers can browse and present the deck but cannot edit it. A few show-wide settings (accent palette, background, slide aspect) sit alongside the slides. The whole deck lives in a single JSON file in a per-placement folder, with uploaded images (auto-resized to keep file sizes reasonable) stored beside it. No database or sync tables.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": []
+    },
+    "created_at": "2026-06-03T15:35:22Z",
+    "modified_at": "2026-06-03T15:35:22Z",
+    "depends_on_capabilities": [],
+    "default_width_px": 640,
+    "default_height_px": 420,
+    "licensed_under_cc0": true,
+    "attribution_log": []
+}
