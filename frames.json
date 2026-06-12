@@ -19,7 +19,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/checklist.tar.gz",
-      "package_sha256": "1d58407b01a93d0876a951244b535f8d884bf6cfe429ece1de16e51ee284c3ee",
+      "package_sha256": "43822e9defbb50026164dbe1fe5b95f045f6b30eadf51c14f67a822d18c668a9",
       "app_version_min": "0.1.7"
     },
     {
@@ -37,7 +37,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/community_home.tar.gz",
-      "package_sha256": "5a6180379f4431b249179ff8b2bbb0540f805666ca5e288876706ba587134a8f",
+      "package_sha256": "e6be11fe764a92181cf214efd669cb1b35caae6b2a8bf2ba917a3e493791ec10",
       "app_version_min": "0.1.7"
     },
     {
@@ -55,7 +55,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/community_library.tar.gz",
-      "package_sha256": "d7466577bfef7d185974394b159372163008074461af61305ebf144fb1070dd6",
+      "package_sha256": "b007c1452a6425f258d46576a5ad49c76cdb9a2b878700020ccd49045f1efa97",
       "app_version_min": "0.1.7"
     },
     {
@@ -73,7 +73,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/discussion_channel.tar.gz",
-      "package_sha256": "a5e1116165b6099d2a821c9483b77ad4cae0f36f22d4f6ff3954e85208918ccc",
+      "package_sha256": "24807507c5e9b3d08b7f7464531cd032bc07370a4d550cd8049bb4e98c6fbc3f",
       "app_version_min": "0.1.7"
     },
     {
@@ -91,7 +91,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/file_folder.tar.gz",
-      "package_sha256": "0ef2848405d7ea45adb3bcca646add98addb0b53f95fe1692ddc3f7623482933",
+      "package_sha256": "f019ba606779d4dc9b804295c608f424de5254b56fe7d5c962fe8a64998f4e87",
       "app_version_min": "0.1.7"
     },
     {
@@ -109,7 +109,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_ascii_runner.tar.gz",
-      "package_sha256": "bf09d17af92a703ec359207593407ccfabadc260e7660c5d3762dbce5bc7fb40",
+      "package_sha256": "7b97124eaf9a888cef39151bee3c5baa9caf008370b75251b5b26f7dc181ac88",
       "app_version_min": "0.1.7"
     },
     {
@@ -127,7 +127,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_dice_roller.tar.gz",
-      "package_sha256": "c5bf8847efc7b0d228f141d0a581785ca0de29188b0928fbb62eb23131c658be",
+      "package_sha256": "cae1116857bc7c1f08fe7747dfda0a42c8734a0df2948440a36af1c9e6348ed1",
       "app_version_min": "0.1.7"
     },
     {
@@ -145,7 +145,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_pancake_stacker.tar.gz",
-      "package_sha256": "9888f639e7b5af71a60303b1962cf0610283749f02f1185abcb4ccd360c21096",
+      "package_sha256": "1e8fc6ba9cdaa3a9e9dd8cbf998f79f578ee5ee0c2d7b2fa8ee5db68082f9aef",
       "app_version_min": "0.1.7"
     },
     {
@@ -163,7 +163,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/garden_gnome.tar.gz",
-      "package_sha256": "9e2ca804ccc83d5771348146c66eb8d1f9586edd2f38db93ad807635d36b1c08",
+      "package_sha256": "7844c2176a5f342cd6e39fb0a071ea43e02e7602e3e46b3a6d790eac832ad0e8",
       "app_version_min": "0.1.7"
     },
     {
@@ -181,7 +181,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/help_desk.tar.gz",
-      "package_sha256": "2eee553a9a94429fa50cb649955e5de7ca942594639883421ba4eac547e9c763",
+      "package_sha256": "858090f55412949c36fc5fcc324b8a1b75e0a86b366366f6a7043f3f6c7eee92",
       "app_version_min": "0.1.7"
     },
     {
@@ -199,7 +199,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/market_weather.tar.gz",
-      "package_sha256": "6f49c7afa05c4af1b4837680b00c896fcbad7e2433d7d79424a74bf05d043472",
+      "package_sha256": "bdc58b4a7942c204e011db35f6eb689c8196513e1acf157a40eac878034c0498",
       "app_version_min": "0.1.7"
     },
     {
@@ -217,7 +217,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_manager.tar.gz",
-      "package_sha256": "1a2be005e110927c3224f7375f2fd65a97f343cf2eb218aa5f1c99454a1ff0a2",
+      "package_sha256": "6bd811f0f0256c17f82084f1971770b581d4e55ff3b7b4985ed222e562c0a6db",
       "app_version_min": "0.1.7"
     },
     {
@@ -235,7 +235,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/roundtable.tar.gz",
-      "package_sha256": "e4c001baba03070a2fe05244075781616446c13f6e6c6363cc4845ff1c487116",
+      "package_sha256": "4b2c329a885dfa8354a5134bd7be24a302c99268886653c6df923bdc004e75fb",
       "app_version_min": "0.1.7"
     },
     {
@@ -244,7 +244,7 @@
       "name": "Slideshow",
       "description": "A simple presentation maker and presenter, unique per placement. Space editors build a deck of slides \u2014 stylized text (headings, body, bullet lists), uploaded images, and shapes \u2014 laid out freely on a fixed slide canvas; everything is positioned and sized proportionally so the deck looks identical from a 300\u00d7300 tile up to a scaled-up fullscreen presentation. Viewers can browse and present the deck but cannot edit it. A few show-wide settings (accent palette, background, slide aspect, and an optional \"keep viewers in sync\" mode that locks every viewer's presentation to the editor's current slide) sit alongside the slides. The whole deck lives in a single JSON file in a per-placement folder, with uploaded images (auto-resized to keep file sizes reasonable) stored beside it. No database or sync tables.",
       "icon": "",
-      "modified_at": "2026-06-05T16:32:29Z",
+      "modified_at": "2026-06-12T15:30:00Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 640,
@@ -253,7 +253,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/slideshow.tar.gz",
-      "package_sha256": "658436bceef84609b2a0322368bfda69d9a25ee6e1d6d581ccd4956a0c462931",
+      "package_sha256": "4bef2c7fab369d20c4bf1812f6af03c545dfe9c935a494d3baaebd108b40e56a",
       "app_version_min": "0.1.7"
     },
     {
@@ -271,7 +271,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/space_radio.tar.gz",
-      "package_sha256": "15586c04c16623728dadeef28ca3b35d57ec326445bfc240322faac0e27b5ad3",
+      "package_sha256": "0b4d3c470412577859df9bd1f29791409ab749fcc25d00b587d82c2f2c884138",
       "app_version_min": "0.1.7"
     },
     {
@@ -289,7 +289,7 @@
       },
       "capability_preview": null,
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/weather_api.tar.gz",
-      "package_sha256": "33fc2fc427a78ebaf464e1bb52a251895c03a0ca87f0ae35d8573a3ec32b3ebe",
+      "package_sha256": "7029697ae40f286740fe00278c05eda07d0057c8b9604a3d02158c72bdfa419b",
       "app_version_min": "0.1.7"
     }
   ]

@@ -93,6 +93,34 @@ function savePresent(sfiId: string, index: number): void {
   Deno.writeTextFileSync(presentFile(sfiId), JSON.stringify({ index }));
 }
 
+// ----- Viewer presence ------------------------------------------------------------------
+// Editors see a live "N watching" count of read-only viewers. Viewers ping every 10s; a
+// session is live until VIEWER_TTL_MS passes without one. In-memory only — a frame restart
+// resets the count until the next round of pings. The sweep interval re-broadcasts when a
+// viewer goes quiet (closing a tab sends no goodbye).
+const VIEWER_TTL_MS = 25_000;
+const _viewersBySfi = new Map<string, Map<string, number>>(); // sfi_id → session → lastSeen ms
+const _lastPushedViewerCount = new Map<string, number>();
+function viewerCount(sfiId: string): number {
+  const m = _viewersBySfi.get(sfiId);
+  if (!m) return 0;
+  const now = Date.now();
+  for (const [sid, t] of m) if (now - t > VIEWER_TTL_MS) m.delete(sid);
+  return m.size;
+}
+function recordViewer(sfiId: string, session: string): void {
+  let m = _viewersBySfi.get(sfiId);
+  if (!m) { m = new Map(); _viewersBySfi.set(sfiId, m); }
+  m.set(session, Date.now());
+}
+function broadcastViewerCount(sfiId: string): void {
+  const count = viewerCount(sfiId);
+  if (_lastPushedViewerCount.get(sfiId) === count) return;
+  _lastPushedViewerCount.set(sfiId, count);
+  pushToInstance(sfiId, { type: "viewers_changed", count });
+}
+setInterval(() => { for (const sfiId of _viewersBySfi.keys()) broadcastViewerCount(sfiId); }, 10_000);
+
 // ----- Validation -----------------------------------------------------------------------
 function num(v: unknown, def: number, lo: number, hi: number): number {
   const n = Number(v);
@@ -203,6 +231,7 @@ function stateFor(peer: ReturnType<typeof parsePeerInfo>) {
     },
     show: loadShow(peer.sfi_id),
     present: loadPresent(peer.sfi_id),
+    viewers: viewerCount(peer.sfi_id),
   };
 }
 
@@ -241,6 +270,17 @@ self.onNetworkRequest = async function (replyPort, reqPath, method, headers, que
     const index = num(v.index, 0, 0, Math.max(0, show.slides.length - 1));
     savePresent(peer.sfi_id, index);
     pushToInstance(peer.sfi_id, { type: "present_changed", index, by: str(v.by, 64) });
+    return jsonReply(replyPort, 200, { ok: true });
+  }
+
+  // Viewer presence ping — read-only viewers announce themselves so editors can see a live
+  // "N watching" count. Editors are never counted.
+  if (reqPath === "/api/viewer_ping" && method === "POST") {
+    if (!peer.is_sfi_editor) {
+      const v = parseJsonBody<{ by?: string }>(body) || {};
+      const sid = str(v.by, 64);
+      if (sid) { recordViewer(peer.sfi_id, sid); broadcastViewerCount(peer.sfi_id); }
+    }
     return jsonReply(replyPort, 200, { ok: true });
   }
 

@@ -22,11 +22,7 @@
       padding: var(--os-sp-xs) var(--os-sp-sm); border-bottom: 1px solid var(--os-border-color);
       background: var(--os-bg-surface);
     }
-    .brand { display: flex; align-items: center; gap: var(--os-sp-xs); margin-right: var(--os-sp-xs); }
-    .brand > i { font-size: 18px; color: var(--ch); }
-    .brand b { font-weight: var(--os-weight-semibold); font-size: var(--os-fs-base); }
     .spacer { flex: 1 1 auto; }
-    .tdiv { width: 1px; align-self: stretch; background: var(--os-border-color); margin: 2px var(--os-sp-xs); }
     .tbtn {
       background: none; border: 0; cursor: pointer; color: var(--os-text-secondary);
       width: 30px; height: 30px; padding: 0; border-radius: var(--os-radius-sm);
@@ -136,6 +132,14 @@
       font-size: 8px; color: var(--os-text-muted); background: color-mix(in srgb, var(--os-bg-surface) 80%, transparent);
       padding: 0 3px; border-radius: 3px;
     }
+    /* Mini slide preview: the embedded Stage needs a measurable box (its child is
+       absolutely positioned), and none of the editor dressing — no dot grid, no
+       shadow, no pointer interaction. */
+    .thumb .stagewrap {
+      position: absolute; inset: 0;
+      background: none; background-image: none; pointer-events: none;
+    }
+    .thumb .stage { box-shadow: none; }
 
     /* ---- Empty / CTA ---- */
     .cta {
@@ -156,6 +160,12 @@
       background: var(--os-bg-surface);
     }
     .viewerbar .pcount { font-family: var(--os-font-mono); font-size: var(--os-fs-sm); color: var(--os-text-muted); min-width: 54px; text-align: center; }
+    /* Live read-only viewer count in the editor topbar. Present = shown, zero = gone. */
+    .vcount {
+      display: inline-flex; align-items: center; gap: 5px; padding: 0 6px;
+      font-family: var(--os-font-mono); font-size: var(--os-fs-sm); color: var(--os-text-secondary);
+    }
+    .vcount i { font-size: 16px; line-height: 0; }
 
     /* ---- Present mode ---- */
     .present { position: fixed; inset: 0; z-index: 100; background: #0e0d0c; display: flex; }
@@ -484,6 +494,7 @@
       const [pIdx, setPIdx] = useState(0);   // current slide while presenting (separate from the editing cursor)
       const [showSettings, setShowSettings] = useState(false);
       const [focusReq, setFocusReq] = useState(0);
+      const [viewerCount, setViewerCount] = useState(0);  // live read-only viewers (editors see this)
 
       const showRef = useRef(null);
       const curRef = useRef(0);
@@ -502,8 +513,12 @@
         const s = await frame.api("api/state").catch(() => null);
         if (!s) return;
         setMe(s.me); setShow(s.show); showRef.current = s.show;
+        if (typeof s.viewers === "number") setViewerCount(s.viewers);
         if (s.present) sharedPresentRef.current = s.present.index;
-        setCur((c) => clamp(c, 0, Math.max(0, s.show.slides.length - 1)));
+        const maxIdx = Math.max(0, s.show.slides.length - 1);
+        // Synced viewers land on the presenter's current slide (late joiners included).
+        if (s.present && s.show.settings.syncPresent && s.me && !s.me.is_sfi_editor) setCur(clamp(s.present.index, 0, maxIdx));
+        else setCur((c) => clamp(c, 0, maxIdx));
       }
       useEffect(() => { refresh(); }, []);
 
@@ -516,15 +531,30 @@
           refresh();
         },
         // Live presentation moved. Fires for peers AND sibling devices of the presenter. We track
-        // the shared index always, and follow it on-screen whenever we're presenting in sync mode.
+        // the shared index always; in sync mode followers track it on-screen everywhere — present
+        // mode and the read-only browse view both.
         present_changed: (data) => {
           if (!data || data.by === SESSION) return;
           sharedPresentRef.current = data.index;
           const sh = showRef.current;
           if (!sh || !sh.settings.syncPresent) return;
-          if (presentRef.current) setPIdx(clamp(data.index, 0, Math.max(0, sh.slides.length - 1)));
+          const idx = clamp(data.index, 0, Math.max(0, sh.slides.length - 1));
+          if (presentRef.current) setPIdx(idx);
+          else if (me && !me.is_sfi_editor) setCur(idx);
+        },
+        viewers_changed: (data) => {
+          if (data && typeof data.count === "number") setViewerCount(data.count);
         },
       });
+
+      // Read-only viewers announce presence so the editor's "watching" count stays live.
+      useEffect(() => {
+        if (!me || me.is_sfi_editor) return;
+        const ping = () => frame.api("api/viewer_ping", { by: SESSION }).catch(() => {});
+        ping();
+        const t = setInterval(ping, 10000);
+        return () => clearInterval(t);
+      }, [me && me.is_sfi_editor]);
 
       function endInteraction() {
         busyRef.current = false;
@@ -543,7 +573,7 @@
             else if (follower) return;
             else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); presentNav(1); }
             else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); presentNav(-1); }
-          } else if (!isEditor && !typing) {
+          } else if (!isEditor && !follower && !typing) {
             if (e.key === "ArrowRight") nav(1); else if (e.key === "ArrowLeft") nav(-1);
           }
         }
@@ -782,7 +812,7 @@
           ${follower ? null : html`
             <button class="pnav left" disabled=${pi === 0} onClick=${(e) => { e.stopPropagation(); presentNav(-1); }}><i class="ph-light ph-caret-left"></i></button>
             <button class="pnav right" disabled=${pi >= slides.length - 1} onClick=${(e) => { e.stopPropagation(); presentNav(1); }}><i class="ph-light ph-caret-right"></i></button>`}
-          <div class="pcount-fixed">${slides.length ? pi + 1 : 0} / ${slides.length}${follower ? " · following presenter" : ""}</div>
+          <div class="pcount-fixed">${slides.length ? pi + 1 : 0} / ${slides.length}${follower ? " · following presenter" : ""}${isEditor && viewerCount > 0 ? " · " + viewerCount + " watching" : ""}</div>
         </div>`;
       }
 
@@ -792,17 +822,18 @@
       if (!isEditor) {
         return html`<div class="app" style=${paletteVars(show)}>
           <div class="topbar">
-            <div class="brand"><i class="ph-light ph-projector-screen"></i><b>Slideshow</b></div>
             <div class="spacer"></div>
             <button class="tbtn primary" title="Present" disabled=${!canPresent} onClick=${enterPresent}><i class="ph-light ph-play"></i></button>
           </div>
           ${slides.length ? html`
             <${Stage} show=${show} slide=${slide} interactive=${false} />
-            <div class="viewerbar">
+            ${show.settings.syncPresent ? html`<div class="viewerbar">
+              <span class="pcount">${curIdx + 1} / ${slides.length} · following presenter</span>
+            </div>` : html`<div class="viewerbar">
               <button class="tbtn" disabled=${curIdx === 0} onClick=${() => nav(-1)}><i class="ph-light ph-caret-left"></i></button>
               <span class="pcount">${curIdx + 1} / ${slides.length}</span>
               <button class="tbtn" disabled=${curIdx >= slides.length - 1} onClick=${() => nav(1)}><i class="ph-light ph-caret-right"></i></button>
-            </div>`
+            </div>`}`
           : html`<div class="stagewrap"><div class="cta"><i class="ph-light ph-projector-screen"></i><span class="big">No slides yet.</span></div></div>`}
         </div>`;
       }
@@ -810,8 +841,6 @@
       // ================= EDITOR =================
       return html`<div class="app" style=${paletteVars(show)}>
         <div class="topbar">
-          <div class="brand"><i class="ph-light ph-projector-screen"></i><b>Slideshow</b></div>
-          <div class="tdiv"></div>
           <button class="tbtn" title="Add heading" onClick=${() => addElement((c) => freshText("heading", W, H, c))}><i class="ph-light ph-text-h-one"></i></button>
           <button class="tbtn" title="Add text" onClick=${() => addElement((c) => freshText("body", W, H, c))}><i class="ph-light ph-text-t"></i></button>
           <button class="tbtn" title="Add bullet list" onClick=${() => addElement((c) => freshText("bullets", W, H, c))}><i class="ph-light ph-list-bullets"></i></button>
@@ -819,6 +848,7 @@
           <button class="tbtn" title="Add rectangle" onClick=${() => addElement((c) => freshShape("rect", W, H, c))}><i class="ph-light ph-square"></i></button>
           <button class="tbtn" title="Add ellipse" onClick=${() => addElement((c) => freshShape("ellipse", W, H, c))}><i class="ph-light ph-circle"></i></button>
           <div class="spacer"></div>
+          ${viewerCount > 0 ? html`<span class="vcount" title="people with the view-only version open"><i class="ph-light ph-eye"></i>${viewerCount}</span>` : null}
           <button class="tbtn ${showSettings ? "on" : ""}" title="Show settings" onClick=${() => setShowSettings(true)}><i class="ph-light ph-gear-six"></i></button>
           <button class="tbtn primary" title="Present" disabled=${!canPresent} onClick=${enterPresent}><i class="ph-light ph-play"></i></button>
           <input ref=${fileInput} type="file" accept="image/*" style="display:none"
