@@ -385,7 +385,7 @@
       "name": "Watercolor Studio",
       "description": "A quiet, beautiful place to paint with watercolors. Each placement is its own sheet of textured paper. Pigments are real watercolor pans \u2014 pick one, or add bits of several into the mixing well and they blend subtractively the way paint actually does (blue plus yellow makes green, complements make mud). A range of brushes (broad wash, round, flat, dry-brush, fine detail) lay translucent washes that pool, bleed, and darken at their edges; layered strokes glaze over one another. A clean-water Lift brush pulls pigment back out. Optional thin guide outlines (a pear, a teacup, a koi, a mountain lake\u2026) sit faintly beneath the paint so new painters can trace as they learn. Editors in the space paint together in real time; anonymous viewers watch read-only. The whole painting is stored as deterministic vector strokes in a single JSON file per placement \u2014 no database, no network.",
       "icon": "",
-      "modified_at": "2026-06-22T18:07:37Z",
+      "modified_at": "2026-06-24T18:22:18Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 760,
@@ -399,7 +399,7 @@
         "web_scripts": []
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/watercolor_studio.tar.gz",
-      "package_sha256": "8c9859e6cb979ebafa0e987c3c1687806134899e54dee86211a34314d4e71149"
+      "package_sha256": "21e08ea23d2ddb8c1c918d2e3e025ff49dfc34606a7dc4957f467f3bf50535c4"
     },
     {
       "kind": "Frames",

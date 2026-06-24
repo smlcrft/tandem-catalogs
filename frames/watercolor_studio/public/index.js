@@ -70,12 +70,15 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
   // depth = midpoint-displacement passes. LOW depth → coarse organic lobes (watercolor
   // blooms). High depth → fine woolly fuzz (felt), so we keep it modest. ragged controls
   // lobe amplitude; rim is the crisp darker boundary where pigment pools as the wash dries.
+  // layers/depth are the two exponential cost knobs: `depth` doubles a stamp polygon's
+  // vertex count per pass, `layers` multiplies the number of fills per stamp. They are kept
+  // deliberately modest — every peer runs this same code, so replay stays consistent.
   const BRUSHES = {
-    wash:   { radiusFrac: 0.085, spacing: 0.22, layers: 6, alpha: 0.050, ragged: 0.30, rim: 0.14, sides: 13, depth: 3, flat: 1.0 },
-    round:  { radiusFrac: 0.038, spacing: 0.22, layers: 5, alpha: 0.066, ragged: 0.26, rim: 0.18, sides: 12, depth: 3, flat: 1.0 },
-    flat:   { radiusFrac: 0.052, spacing: 0.20, layers: 5, alpha: 0.066, ragged: 0.18, rim: 0.16, sides: 11, depth: 3, flat: 0.34 },
-    dry:    { radiusFrac: 0.044, spacing: 0.52, layers: 4, alpha: 0.070, ragged: 0.60, rim: 0.06, sides: 11, depth: 4, flat: 0.85 },
-    detail: { radiusFrac: 0.0065, spacing: 0.22, layers: 4, alpha: 0.130, ragged: 0.16, rim: 0.22, sides: 10, depth: 3, flat: 1.0 },
+    wash:   { radiusFrac: 0.085, spacing: 0.22, layers: 4, alpha: 0.066, ragged: 0.30, rim: 0.14, sides: 13, depth: 2, flat: 1.0 },
+    round:  { radiusFrac: 0.038, spacing: 0.22, layers: 3, alpha: 0.090, ragged: 0.26, rim: 0.18, sides: 12, depth: 2, flat: 1.0 },
+    flat:   { radiusFrac: 0.052, spacing: 0.20, layers: 3, alpha: 0.090, ragged: 0.18, rim: 0.16, sides: 11, depth: 2, flat: 0.34 },
+    dry:    { radiusFrac: 0.044, spacing: 0.52, layers: 3, alpha: 0.086, ragged: 0.60, rim: 0.06, sides: 11, depth: 3, flat: 0.85 },
+    detail: { radiusFrac: 0.0065, spacing: 0.22, layers: 3, alpha: 0.150, ragged: 0.16, rim: 0.22, sides: 10, depth: 2, flat: 1.0 },
     lift:   { radiusFrac: 0.050, spacing: 0.40, layers: 1, alpha: 0,     ragged: 0.34, rim: 0,    sides: 10, depth: 3, flat: 1.0 },
   };
   const BRUSH_LIST = ["wash", "round", "flat", "dry", "detail", "lift"];
@@ -308,7 +311,10 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
   // --------------------------------------------------------------------------------------
   // Sheet layout — fit a paper rectangle of the chosen aspect inside the stage.
   // --------------------------------------------------------------------------------------
-  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  // Watercolor is soft, so a high device-pixel-ratio buys almost nothing visually while
+  // squaring the blended-pixel area. Cap at 1.5 — the single biggest fill-rate lever.
+  const DPR = Math.min(1.5, window.devicePixelRatio || 1);
+  let lastLayoutW = 0, lastLayoutH = 0;
   function layoutSheet(animated) {
     const sw = stage.clientWidth;
     const sh = stage.clientHeight;
@@ -321,6 +327,10 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
     if (availW / availH > ar) { h = availH; w = h * ar; }
     else { w = availW; h = w / ar; }
     w = Math.round(w); h = Math.round(h);
+    // A resize that doesn't change the sheet's pixel size would otherwise re-rasterize the
+    // entire painting for nothing — skip it. (Aspect changes DO change w/h, so they pass.)
+    if (w === lastLayoutW && h === lastLayoutH && !animated) return;
+    lastLayoutW = w; lastLayoutH = h;
     sheet.style.width = `${w}px`;
     sheet.style.height = `${h}px`;
     sheet.style.left = `${Math.round((sw - w) / 2)}px`;
@@ -374,6 +384,7 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
   }
 
   // Walk the polyline and place evenly-spaced stamps, interpolating width + direction.
+  const MAX_STAMPS_PER_STROKE = 600;
   function stampPositions(points, baseR, spacing, W, H) {
     const pts = points.map(([nx, ny, w]) => [nx * W, ny * H, w]);
     const out = [];
@@ -382,7 +393,15 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
       push(pts[0][0], pts[0][1], pts[0][2], 0);
       return out;
     }
-    const step = Math.max(1, baseR * spacing);
+    // Floor the spacing so a tiny brush (e.g. `detail`) can't emit a stamp every ~2px, and
+    // cap the absolute count so one long stroke can't spawn thousands of multi-layer fills.
+    // Both bound the per-stroke render cost; each stamp is the expensive unit.
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    }
+    let step = Math.max(2 * DPR, baseR * spacing);
+    if (total / step > MAX_STAMPS_PER_STROKE) step = total / MAX_STAMPS_PER_STROKE;
     let carry = 0;
     push(pts[0][0], pts[0][1], pts[0][2], Math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]));
     for (let i = 1; i < pts.length; i++) {
@@ -402,6 +421,19 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
     return out;
   }
 
+  // One reused offscreen buffer. A stroke is rendered here in isolation with NORMAL
+  // compositing, then glazed onto the painting in a SINGLE `multiply` blit. This replaces
+  // thousands of per-fill multiply blends (the heaviest cost) with one composite per stroke.
+  let scratch = null, scratchCtx = null;
+  function getScratch(w, h) {
+    if (!scratch) {
+      scratch = document.createElement("canvas");
+      scratchCtx = scratch.getContext("2d");
+    }
+    if (scratch.width !== w || scratch.height !== h) { scratch.width = w; scratch.height = h; }
+    return scratchCtx;
+  }
+
   function renderStroke(ctx, stroke, preview) {
     const B = BRUSHES[stroke.brush] || BRUSHES.round;
     const W = ctx.canvas.width, H = ctx.canvas.height;
@@ -410,8 +442,10 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
     const rng = mulberry32(stroke.seed >>> 0);
     const stamps = stampPositions(stroke.points, baseR, B.spacing, W, H);
 
-    ctx.save();
+    // Lift = clean water pulling pigment back UP. It must act on the live painting, so it
+    // composites directly onto the target rather than through the isolated buffer.
     if (stroke.brush === "lift") {
+      ctx.save();
       ctx.globalCompositeOperation = "destination-out";
       const liftStrength = 0.30 + 0.45 * (stroke.water ?? 0.5);
       for (const st of stamps) {
@@ -428,8 +462,11 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
       return;
     }
 
-    ctx.globalCompositeOperation = "multiply";
-    ctx.lineJoin = "round";
+    // Render the stroke body into the isolated buffer with normal (source-over) compositing.
+    const sctx = getScratch(W, H);
+    sctx.clearRect(0, 0, W, H);
+    sctx.save();
+    sctx.lineJoin = "round";
     const [pr, pg, pb] = hexToRgb255(stroke.pigment || "#333333");
     const dilute = stroke.water ?? 0.5;
     const alphaMul = 1.25 - 0.85 * dilute;        // wetter → paler
@@ -447,7 +484,7 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
       }
       const flatY = st.r * B.flat;
       const ang = stroke.brush === "flat" ? st.ang + Math.PI / 2 : st.ang;
-      ctx.fillStyle = fillStyle;
+      sctx.fillStyle = fillStyle;
       // Keep the layers in a tight band near full radius so the body reads as solid pigment
       // ending in a defined edge — not a fading fibrous halo (which looks like felt).
       let outer = null;
@@ -455,53 +492,103 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
         const grow = 0.90 + (l / Math.max(1, layers)) * 0.14 + rng() * 0.05;
         const poly = deform(rng, st.x, st.y, st.r * grow, flatY * grow, ang,
           B.sides, B.depth, B.ragged * raggedMul);
-        ctx.fill(polyPath(poly));
+        sctx.fill(polyPath(poly));
         outer = poly;
       }
       // Edge-darkening rim — pigment migrates to the drying boundary and pools there, the
       // single most "watercolor" cue. Trace the outermost layer with a denser pass.
       if (B.rim > 0 && outer) {
         const rimAlpha = Math.min(0.45, a * (1.2 + 4 * B.rim) * (1 - 0.4 * dilute));
-        ctx.strokeStyle = `rgba(${pr},${pg},${pb},${rimAlpha.toFixed(4)})`;
-        ctx.lineWidth = Math.max(0.75, st.r * 0.05);
-        ctx.stroke(polyPath(outer));
+        sctx.strokeStyle = `rgba(${pr},${pg},${pb},${rimAlpha.toFixed(4)})`;
+        sctx.lineWidth = Math.max(0.75, st.r * 0.05);
+        sctx.stroke(polyPath(outer));
       }
     }
+    sctx.restore();
+
+    // Glaze the finished stroke onto the painting in one multiply composite.
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.drawImage(scratch, 0, 0);
     ctx.restore();
   }
 
   // Bumped on every full repaint so an in-flight animated replay cancels itself.
   let replayGen = 0;
 
+  // True while a chunked repaint is spread across frames — addStroke defers to it so a stroke
+  // arriving mid-repaint isn't drawn twice (the in-flight loop will reach it).
+  let repaintInFlight = false;
+
   function repaintAll() {
-    replayGen++;
+    const gen = ++replayGen;
+    clearUndoCache();   // the canvas is being rebuilt from scratch; snapshots no longer align
+    repaintInFlight = true;
     paintCtx.clearRect(0, 0, paint.width, paint.height);
-    for (const id of order) {
-      const s = strokes.get(id);
-      if (s) renderStroke(paintCtx, s, false);
-    }
     renderMeta();
+    let i = 0;
+    const step = () => {
+      if (gen !== replayGen) return;          // a newer repaint/replay took over
+      const start = performance.now();
+      while (i < order.length) {
+        const s = strokes.get(order[i++]);
+        if (s) renderStroke(paintCtx, s, false);
+        if (performance.now() - start > 8) break;   // keep each chunk within one frame
+      }
+      if (i < order.length) { requestAnimationFrame(step); return; }
+      repaintInFlight = false;
+    };
+    step();
   }
 
   // Replay strokes one at a time with a short pause, so opening a painting feels like
   // watching it be painted. Any repaintAll() (resize, delete, clear) cancels it.
   function replayAnimated() {
     const gen = ++replayGen;
+    clearUndoCache();
+    repaintInFlight = true;
     paintCtx.clearRect(0, 0, paint.width, paint.height);
     renderMeta();
-    if (!order.length) return;
+    if (!order.length) { repaintInFlight = false; return; }
     let i = 0;
     const tick = () => {
       if (gen !== replayGen) return;        // a newer repaint took over
       const s = strokes.get(order[i++]);
       if (s) renderStroke(paintCtx, s, false);
-      if (i < order.length) setTimeout(tick, 50);
+      if (i < order.length) { setTimeout(tick, 50); return; }
+      repaintInFlight = false;
     };
     tick();
   }
 
+  // --------------------------------------------------------------------------------------
+  // Undo snapshots — keep up to 2 canvas states so a quick succession of undos can pop the
+  // top strokes back off without re-rendering the whole painting. A snapshot is the paint
+  // canvas as it stood *just before* a stroke was glazed on; it is only valid while that
+  // stroke is still the tail of `order`, so any full repaint/clear/resize discards the stack.
+  // --------------------------------------------------------------------------------------
+  const UNDO_CACHE_MAX = 3;   // how many recent strokes can be undone without a full repaint
+  let undoCache = [];   // [{ bitmap: <canvas>, strokeId }] — oldest first, newest last
+  function clearUndoCache() { undoCache = []; }
+  function pushUndoSnapshot(strokeId) {
+    const snap = document.createElement("canvas");
+    snap.width = paint.width; snap.height = paint.height;
+    snap.getContext("2d").drawImage(paint, 0, 0);
+    undoCache.push({ bitmap: snap, strokeId });
+    while (undoCache.length > UNDO_CACHE_MAX) undoCache.shift();
+  }
+
   function addStroke(stroke) {
     if (strokes.has(stroke.id)) return;
+    // While a chunked repaint/replay is rebuilding the canvas, just append — that loop will
+    // draw this stroke. Painting it here too would double-glaze it and spoil the snapshot.
+    if (repaintInFlight) {
+      strokes.set(stroke.id, stroke);
+      order.push(stroke.id);
+      renderMeta();
+      return;
+    }
+    pushUndoSnapshot(stroke.id);   // capture BEFORE the stroke is glazed on
     strokes.set(stroke.id, stroke);
     order.push(stroke.id);
     renderStroke(paintCtx, stroke, false);
@@ -527,6 +614,7 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
     if (oi >= 0) order[oi] = newId;
     const si = myStack.indexOf(oldId);
     if (si >= 0) myStack[si] = newId;
+    for (const c of undoCache) if (c.strokeId === oldId) c.strokeId = newId;
   }
 
   // --------------------------------------------------------------------------------------
@@ -567,7 +655,19 @@ import { frame, applyChannel } from "/lib/js/framelib.js";
     }
     if (!id) return;
     if (id.startsWith("tmp_")) { toast("still saving…"); myStack.push(id); return; }
-    removeStroke(id);
+    // Fast path: if this stroke is still the top of the stack and we cached the canvas from
+    // just before it was painted, restore that snapshot instead of repainting everything.
+    const top = undoCache[undoCache.length - 1];
+    if (order.length && order[order.length - 1] === id && top && top.strokeId === id) {
+      undoCache.pop();
+      strokes.delete(id);
+      order.pop();
+      paintCtx.clearRect(0, 0, paint.width, paint.height);
+      paintCtx.drawImage(top.bitmap, 0, 0);
+      renderMeta();
+    } else {
+      removeStroke(id);   // buried under later strokes — full (chunked) repaint
+    }
     try { await api("POST", "/api/stroke/delete", { ids: [id] }); }
     catch (e) { toast("undo failed"); }
   }
