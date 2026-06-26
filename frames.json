@@ -171,7 +171,7 @@
       "name": "Pancake Stacker",
       "description": "Simple solo arcade game. A pancake swings back and forth at the top of the griddle \u2014 tap, click, or hit space to drop it onto the stack. Each pancake trims to the overlap with the one below, so the tower narrows as you climb. Miss entirely and the stack topples. High score per placement.",
       "icon": "",
-      "modified_at": "2026-06-06T01:24:07Z",
+      "modified_at": "2026-06-26T12:34:38Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 400.0,
@@ -185,7 +185,7 @@
         "web_scripts": []
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/game_pancake_stacker.tar.gz",
-      "package_sha256": "9888f639e7b5af71a60303b1962cf0610283749f02f1185abcb4ccd360c21096",
+      "package_sha256": "7c7cda58ca587bf4276d546a969b720a7ad70c7835cc4e0b47747b2698775a6e",
       "app_version_min": "0.1.7"
     },
     {

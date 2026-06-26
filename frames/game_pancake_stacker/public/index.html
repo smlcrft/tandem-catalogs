@@ -7,9 +7,14 @@
   <link rel="stylesheet" href="dyn/frame-prefs.css">
   <style>
     :root { --ch: var(--os-c8); }
-    body { margin: 0; font-family: var(--os-font-sans); background: var(--os-bg); color: var(--os-text);
-      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-      padding: var(--os-sp-md); gap: var(--os-sp-sm); user-select: none; -webkit-user-select: none; }
+    html, body { height: 100%; }
+    body { margin: 0; overflow: hidden; font-family: var(--os-font-sans); background: var(--os-bg);
+      color: var(--os-text); display: flex; align-items: center; justify-content: center;
+      user-select: none; -webkit-user-select: none; }
+    /* The board is laid out at its natural size; a JS "zoom" uniformly scales it
+       to fit the placement (down to ~200×200) without touching the game buffer. */
+    .board { display: flex; flex-direction: column; align-items: center;
+      padding: var(--os-sp-md); gap: var(--os-sp-sm); transform-origin: center center; }
     h1 { margin: 0; font-size: var(--os-fs-sm); font-weight: var(--os-weight-medium);
       color: var(--os-text-muted); text-transform: uppercase; letter-spacing: 0.08em;
       font-family: var(--os-font-mono); }
@@ -79,17 +84,26 @@
   </style>
 </head>
 <body>
-  <h1><i class="ph-light ph-stack"></i> Pancake Stacker</h1>
-  <div class="hud">
-    <span>Stack <strong id="score">0</strong></span>
-    <span>Best <strong id="best">0</strong></span>
+  <div class="board">
+    <h1><i class="ph-light ph-stack"></i> Pancake Stacker</h1>
+    <div class="hud">
+      <span>Stack <strong id="score">0</strong></span>
+      <span>Best <strong id="best">0</strong></span>
+    </div>
+    <div class="stage">
+      <canvas id="game" width="360" height="480"></canvas>
+      <div id="callout" class="callout-layer"></div>
+      <div id="result"></div>
+      <div class="modal-backdrop" id="start">
+        <div class="gameover">
+          <h2>Pancake Stacker</h2>
+          <p>Drop pancakes to build the tallest stack.</p>
+          <div style="margin-top:8px"><button id="startBtn">Start stacking</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="hint">click · tap · spacebar to drop</div>
   </div>
-  <div class="stage">
-    <canvas id="game" width="360" height="480"></canvas>
-    <div id="callout" class="callout-layer"></div>
-    <div id="result"></div>
-  </div>
-  <div class="hint">click · tap · spacebar to drop</div>
 
   <script type="module">
     import { frame } from "/lib/js/framelib.js";
@@ -123,6 +137,7 @@
     let alive = true;
     let started = false;
     let isRedStack = false;
+    let rafId = null;
 
     const $score = document.getElementById('score');
     const $best  = document.getElementById('best');
@@ -440,13 +455,6 @@
 
       if (moving)   drawPancake(moving.x, hoverTopY(moving.type), moving.w, stack.length, false, moving.type, pieceHeight(moving.type));
       if (dropping) drawPancake(dropping.x, dropping.y, dropping.w, stack.length, false, dropping.type, dropping.h || PANCAKE_H);
-
-      if (!started) {
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.font = '600 14px var(--os-font-mono, monospace)';
-        ctx.textAlign = 'center';
-        ctx.fillText('press space / tap to start', W / 2, H / 2);
-      }
     }
 
     function drawPancake(x, y, w, i, withSyrup, type, h) {
@@ -579,24 +587,74 @@
       }[c]));
     }
 
+    // Render a single idle frame: an empty griddle with one base pancake, no
+    // moving piece and no animation running. This is the pre-start screen — it
+    // costs one draw, not a perpetual requestAnimationFrame loop.
+    function initStatic() {
+      alive = true;
+      started = false;
+      isRedStack = false;
+      stack = [{ x: (W - START_WIDTH) / 2, w: START_WIDTH, type: 'normal' }];
+      scrollY = 0;
+      score = 0;
+      moving = null;
+      dropping = null;
+      $score.textContent = '0';
+      draw();
+    }
+
     function loop() {
       update();
       draw();
-      requestAnimationFrame(loop);
+      rafId = requestAnimationFrame(loop);
     }
+
+    function startLoop() {
+      if (rafId == null) rafId = requestAnimationFrame(loop);
+    }
+
+    const $start = document.getElementById('start');
+
+    // Leave the idle start screen and begin playing (and animating) only on an
+    // explicit user action — click the button, tap the screen, or hit space.
+    function beginGame() {
+      if (started) return;
+      resumeAudio();
+      if ($start && $start.parentNode) $start.remove();
+      reset();        // sets started = true and spawns the first moving piece
+      startLoop();
+    }
+
+    if ($start) $start.addEventListener('mousedown', beginGame);
 
     canvas.addEventListener('mousedown', drop);
     canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drop(); }, { passive: false });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
-        drop();
+        if (!started) beginGame(); else drop();
       }
     });
 
+    // Responsive "zoom": the 360×480 game buffer is fixed (mechanics untouched);
+    // we uniformly scale the whole board to fit the placement, so it stays
+    // playable down to ~200×200. offsetWidth/Height ignore the transform, so the
+    // natural size we measure is stable across repeated fits.
+    const board = document.querySelector('.board');
+    function fit() {
+      const nw = board.offsetWidth, nh = board.offsetHeight;
+      if (!nw || !nh) return;
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const s = Math.min(vw / nw, vh / nh, 2);
+      board.style.transform = `scale(${s})`;
+    }
+    new ResizeObserver(fit).observe(document.documentElement);
+    window.addEventListener('resize', fit);
+
     loadState().then(() => {
-      reset();
-      loop();
+      initStatic();
+      fit();
     });
   </script>
 </body>
