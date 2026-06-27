@@ -292,7 +292,7 @@
       "name": "Member Manager",
       "description": "View and manage a roster of people and their roles within an organization, including an optional phone number for each member. Member entries are stored in a shared SyncTable so every space member sees the same list. Email is a one-tap mailto link; a phone number offers a call/text chooser. Per-placement preferences (org name, available roles, edit policy) are stored in a local JSON file.",
       "icon": "",
-      "modified_at": "2026-06-27T13:24:33Z",
+      "modified_at": "2026-06-27T14:00:00Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 0,
@@ -306,7 +306,30 @@
         "web_scripts": []
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_manager.tar.gz",
-      "package_sha256": "ae6021a895d4a2f091d438dcc4b8ec67d07a92de1261d344848c8de7e294a93f",
+      "package_sha256": "b2cfe15f21b9f149d83e5826408fde16198653669bb2582b5cd01311edd42cfc",
+      "app_version_min": "0.1.8"
+    },
+    {
+      "kind": "Frames",
+      "id": "member_reachout",
+      "name": "Member Reachout",
+      "description": "Send updates and notifications to the people in your roster. Reads the same shared Members SyncTable as the Member Manager frame (bind it to the same table when prompted), so names, roles, emails and optional phone numbers stay in one place. Compose a message, pick who hears it (a role, several roles, or everyone), then send it as one bcc email or hand-text everyone with a phone number \u2014 one tap at a time. Every send is logged locally (date, audience, method) so you can browse the backlog and re-send later. An optional public view can expose the message history for chosen roles.",
+      "icon": "",
+      "modified_at": "2026-06-27T14:00:00Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 0,
+        "default_height_px": 0,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "permissions": {
+        "net": [],
+        "web": [],
+        "web_scripts": []
+      },
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_reachout.tar.gz",
+      "package_sha256": "c30bd13a4ebdf6f5f530c3913e2d768e91fbb14d0d07a960b7b05f9f0a04bbd7",
       "app_version_min": "0.1.8"
     },
     {

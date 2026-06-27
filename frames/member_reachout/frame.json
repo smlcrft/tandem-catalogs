@@ -1,0 +1,16 @@
+{
+    "name": "Member Reachout",
+    "description": "Send updates and notifications to the people in your roster. Reads the same shared Members SyncTable as the Member Manager frame (bind it to the same table when prompted), so names, roles, emails and optional phone numbers stay in one place. Compose a message, pick who hears it (a role, several roles, or everyone), then send it as one bcc email or hand-text everyone with a phone number — one tap at a time. Every send is logged locally (date, audience, method) so you can browse the backlog and re-send later. An optional public view can expose the message history for chosen roles.",
+    "frame_type": "Tandem",
+    "permissions": {
+        "net": [],
+        "web": [],
+        "web_scripts": []
+    },
+    "created_at": "2026-06-27T14:00:00Z",
+    "modified_at": "2026-06-27T14:00:00Z",
+    "app_version_min": "0.1.8",
+    "depends_on_capabilities": [],
+    "licensed_under_cc0": true,
+    "attribution_log": []
+}

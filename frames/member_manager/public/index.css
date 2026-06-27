@@ -290,7 +290,7 @@ body {
   gap: var(--os-sp-lg);
   padding: var(--os-sp-lg);
   text-align: center;
-  animation: contact-bloom 200ms var(--os-ease-spring) both;
+  animation: contact-bloom 200ms var(--os-ease-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
 .contact-modal__who {
@@ -330,7 +330,7 @@ body {
   font-size: var(--os-fs-sm);
   font-weight: var(--os-weight-medium);
   cursor: pointer;
-  transition: transform 80ms var(--os-ease-spring), filter var(--os-transition-fast);
+  transition: transform 80ms var(--os-ease-spring, cubic-bezier(0.22, 1, 0.36, 1)), filter var(--os-transition-fast);
 }
 
 .contact-action i {

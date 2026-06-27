@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Member Reachout</title>
+  <link rel="stylesheet" href="dyn/frame-prefs.css">
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import {
+  frame, html, render, useState, useEffect, useMemo,
+  useFramePush, applyChannel, WAITING, WaitingForOwner,
+} from "/lib/js/framelib.js";
+
+// ---- small helpers --------------------------------------------------------------------
+function fmtWhen(ms) {
+  const n = Number(ms);
+  if (!n) return "";
+  const d = new Date(n);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function audienceLabel(entry) {
+  if (entry.to_all) return "Everyone";
+  if (!entry.roles || !entry.roles.length) return "—";
+  return entry.roles.join(", ");
+}
+
+function cleanPhone(p) {
+  return String(p || "").replace(/[^0-9+]/g, "");
+}
+
+// ---- root -----------------------------------------------------------------------------
+function App() {
+  const [state, setState] = useState(null);   // { settings, viewer, can_edit, roles }
+  const [log, setLog] = useState(null);        // { entries, can_edit?, public_disabled?, anon_view? }
+  const [waiting, setWaiting] = useState(false);
+  const [compose, setCompose] = useState(null); // null | { to_all, roles, subject, message }
+  const [showSettings, setShowSettings] = useState(false);
+
+  async function loadState() {
+    const s = await frame.apiSafe("api/state");
+    if (s === WAITING) { setWaiting(true); return null; }
+    setWaiting(false);
+    setState(s);
+    return s;
+  }
+  async function loadLog() {
+    const l = await frame.apiSafe("api/log");
+    if (l === WAITING) { setWaiting(true); return; }
+    setLog(l);
+  }
+
+  useEffect(() => {
+    (async () => {
+      const s = await loadState();
+      if (s) {
+        applyChannel(document.body, s.viewer?.space_color || "");
+        await loadLog();
+      }
+    })();
+  }, []);
+
+  useFramePush({
+    log_changed: () => loadLog(),
+    settings_changed: async () => { await loadState(); await loadLog(); },
+  });
+
+  if (waiting) {
+    return html`<${WaitingForOwner} className="empty" message="Waiting for the space owner to link this frame to the Members table…" />`;
+  }
+  if (!state || !log) return html`<div class="empty">Loading…</div>`;
+
+  const { settings, viewer, can_edit, roles } = state;
+  document.title = (settings.title || "Reachout") + " · Member Reachout";
+
+  const entries = log.entries || [];
+
+  function openNew() {
+    setCompose({ to_all: false, roles: [], subject: "", message: "" });
+  }
+  function resend(entry) {
+    setCompose({
+      to_all: !!entry.to_all,
+      roles: entry.to_all ? [] : (entry.roles || []).slice(),
+      subject: entry.subject || "",
+      message: entry.message || "",
+    });
+  }
+  async function afterSend() {
+    setCompose(null);
+    await loadLog();
+  }
+
+  return html`
+    <header class="page-header">
+      <div class="title">
+        <i class="ph-light ph-megaphone-simple icon-md"></i>
+        <h1>${settings.title || "Reachout"}</h1>
+      </div>
+      <div class="header-actions">
+        <span class="badge" title="messages sent">${String(entries.length)}</span>
+        ${viewer.is_owner && html`
+          <button class="ghost" title="Settings" onClick=${() => setShowSettings(true)}>
+            <i class="ph-light ph-gear icon-sm"></i>
+          </button>
+        `}
+      </div>
+    </header>
+
+    ${can_edit && html`
+      <button class="new-message" onClick=${openNew}>
+        <i class="ph-light ph-paper-plane-tilt"></i>
+        <span>New message</span>
+      </button>
+    `}
+
+    <${SentLog}
+      entries=${entries}
+      canEdit=${can_edit}
+      isMember=${viewer.is_sfi_member}
+      publicDisabled=${!!log.public_disabled}
+      onResend=${resend}
+      onRefresh=${loadLog}
+    />
+
+    ${compose && html`
+      <${ComposeModal}
+        roles=${roles || []}
+        initial=${compose}
+        onClose=${() => setCompose(null)}
+        onSent=${afterSend}
+      />
+    `}
+
+    ${showSettings && html`
+      <${SettingsModal}
+        settings=${settings}
+        roles=${roles || []}
+        onClose=${() => setShowSettings(false)}
+        onSaved=${async () => { setShowSettings(false); await loadState(); await loadLog(); }}
+      />
+    `}
+  `;
+}
+
+// ---- sent-message backlog -------------------------------------------------------------
+function SentLog({ entries, canEdit, isMember, publicDisabled, onResend, onRefresh }) {
+  if (publicDisabled) {
+    return html`
+      <div class="empty">
+        <i class="ph-light ph-eye-slash icon-lg"></i>
+        <div>This reachout board isn't public.</div>
+      </div>`;
+  }
+  if (!entries.length) {
+    return html`
+      <div class="empty">
+        <i class="ph-light ph-hand-waving icon-lg"></i>
+        <div>${canEdit ? "No messages yet — say hello with a new message above." : (isMember ? "No messages have been sent yet." : "Nothing has been shared publicly yet.")}</div>
+      </div>`;
+  }
+  return html`
+    <div class="log">
+      ${entries.map((e) => html`<${LogEntry} key=${e.id} entry=${e} canEdit=${canEdit} onResend=${onResend} onRefresh=${onRefresh} />`)}
+    </div>`;
+}
+
+function LogEntry({ entry, canEdit, onResend, onRefresh }) {
+  const [open, setOpen] = useState(false);
+  const isText = entry.method === "text";
+
+  async function del() {
+    if (!(await frame.confirm("Remove this message from the log?", { danger: true, okLabel: "Remove" }))) return;
+    try {
+      await frame.api("api/log/delete", { id: entry.id });
+      await onRefresh();
+    } catch (e) { await frame.alert(e.message || "failed"); }
+  }
+
+  const countLabel = isText
+    ? `${entry.attempted_count}/${entry.recipient_count} texted`
+    : `${entry.recipient_count} emailed`;
+
+  return html`
+    <div class="entry ${open ? "entry--open" : ""}">
+      <button class="entry__head" onClick=${() => setOpen(!open)}>
+        <span class="entry__method ${isText ? "is-text" : "is-email"}" title=${isText ? "Sent as text" : "Sent as email"}>
+          <i class="ph-light ${isText ? "ph-chat-circle-dots" : "ph-envelope-simple"}"></i>
+        </span>
+        <span class="entry__main">
+          <span class="entry__audience">${audienceLabel(entry)}</span>
+          <span class="entry__preview">${entry.subject ? entry.subject + " — " : ""}${entry.message}</span>
+        </span>
+        <span class="entry__when">${fmtWhen(entry.sent_at_ms)}</span>
+      </button>
+      ${open && html`
+        <div class="entry__body">
+          ${entry.subject && html`<div class="entry__subject">${entry.subject}</div>`}
+          <div class="entry__message">${entry.message}</div>
+          <div class="entry__foot">
+            <span class="entry__count">${countLabel}</span>
+            ${canEdit && html`
+              <span class="entry__tools">
+                <button class="ghost" title="Re-send this message" onClick=${() => onResend(entry)}>
+                  <i class="ph-light ph-arrow-counter-clockwise icon-sm"></i> re-send
+                </button>
+                <button class="ghost danger" title="Remove from log" onClick=${del}>
+                  <i class="ph-light ph-trash icon-sm"></i>
+                </button>
+              </span>
+            `}
+          </div>
+        </div>
+      `}
+    </div>`;
+}
+
+// ---- compose --------------------------------------------------------------------------
+function ComposeModal({ roles, initial, onClose, onSent }) {
+  const [toAll, setToAll] = useState(!!initial.to_all);
+  const [picked, setPicked] = useState(new Set(initial.roles || []));
+  const [subject, setSubject] = useState(initial.subject || "");
+  const [message, setMessage] = useState(initial.message || "");
+  const [busy, setBusy] = useState(false);
+  const [runner, setRunner] = useState(null); // null | { recipients }
+
+  const roleMap = useMemo(() => {
+    const m = new Map();
+    for (const r of roles) m.set(r.role, r);
+    return m;
+  }, [roles]);
+
+  function toggleRole(role) {
+    setToAll(false);
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role); else next.add(role);
+      return next;
+    });
+  }
+  function chooseEveryone() {
+    setToAll(true);
+    setPicked(new Set());
+  }
+
+  const selectedRoles = Array.from(picked);
+  const hasAudience = toAll || selectedRoles.length > 0;
+
+  // Estimated reach + whether the audience is fully phone-reachable (unlocks text).
+  const reach = useMemo(() => {
+    if (toAll) return roles.reduce((n, r) => n + r.count, 0);
+    return selectedRoles.reduce((n, r) => n + (roleMap.get(r)?.count || 0), 0);
+  }, [toAll, picked, roles]);
+
+  const canText = useMemo(() => {
+    if (!hasAudience || reach === 0) return false;
+    if (toAll) return roles.length > 0 && roles.every((r) => r.all_have_phone);
+    return selectedRoles.every((r) => roleMap.get(r)?.all_have_phone);
+  }, [toAll, picked, roles, reach]);
+
+  function audiencePayload() {
+    return { to_all: toAll, roles: toAll ? [] : selectedRoles };
+  }
+
+  async function resolve() {
+    const r = await frame.api("api/resolve", audiencePayload());
+    return r.recipients || [];
+  }
+
+  async function sendEmail() {
+    if (!message.trim()) { await frame.alert("Write a message first."); return; }
+    if (!hasAudience) { await frame.alert("Pick who should hear this."); return; }
+    setBusy(true);
+    try {
+      const recipients = await resolve();
+      if (!recipients.length) { await frame.alert("No one matches that audience yet."); setBusy(false); return; }
+      const bcc = recipients.map((r) => encodeURIComponent(r.email)).filter(Boolean).join(",");
+      const parts = [`bcc=${bcc}`];
+      if (subject.trim()) parts.push(`subject=${encodeURIComponent(subject.trim())}`);
+      parts.push(`body=${encodeURIComponent(message)}`);
+      frame.openExternalUrl(`mailto:?${parts.join("&")}`);
+      await frame.api("api/log", {
+        ...audiencePayload(), method: "email",
+        subject: subject.trim(), message, recipient_count: recipients.length,
+      });
+      await onSent();
+    } catch (e) {
+      await frame.alert(e.message || "failed to send");
+      setBusy(false);
+    }
+  }
+
+  async function startTexting() {
+    if (!message.trim()) { await frame.alert("Write a message first."); return; }
+    if (!hasAudience) { await frame.alert("Pick who should hear this."); return; }
+    setBusy(true);
+    try {
+      const recipients = (await resolve()).filter((r) => cleanPhone(r.phone));
+      if (!recipients.length) { await frame.alert("No phone numbers for that audience."); setBusy(false); return; }
+      setRunner({ recipients });
+    } catch (e) {
+      await frame.alert(e.message || "failed");
+    }
+    setBusy(false);
+  }
+
+  // Finishing the texting run: log it (only if at least one was actually attempted),
+  // matching email behaviour of recording every send.
+  async function finishTexting(attempted, total) {
+    setRunner(null);
+    if (attempted > 0) {
+      try {
+        await frame.api("api/log", {
+          ...audiencePayload(), method: "text",
+          subject: "", message, recipient_count: total, attempted_count: attempted,
+        });
+        await onSent();
+        return;
+      } catch (e) { await frame.alert(e.message || "failed to log"); }
+    }
+    onClose();
+  }
+
+  if (runner) {
+    return html`<${TextRunner}
+      recipients=${runner.recipients}
+      message=${message}
+      onFinish=${(attempted) => finishTexting(attempted, runner.recipients.length)}
+    />`;
+  }
+
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target.classList.contains("overlay")) onClose(); }}>
+      <div class="sheet bloom">
+        <header class="sheet-header">
+          <h2><i class="ph-light ph-paper-plane-tilt"></i> New message</h2>
+          <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+        </header>
+
+        <div class="sheet-body">
+          <div class="field">
+            <span class="field-label">Who hears this?</span>
+            <div class="audience">
+              <button class="aud-all ${toAll ? "is-on" : ""}" onClick=${chooseEveryone}>
+                <i class="ph-light ph-users-three"></i> Everyone
+                <span class="aud-count">${roles.reduce((n, r) => n + r.count, 0)}</span>
+              </button>
+              <div class="aud-roles ${toAll ? "is-dimmed" : ""}">
+                ${roles.length === 0 && html`<div class="muted small">No members in the roster yet.</div>`}
+                ${roles.map((r) => html`
+                  <label class="aud-role ${picked.has(r.role) ? "is-on" : ""}" key=${r.role}>
+                    <input type="checkbox" checked=${picked.has(r.role)} onChange=${() => toggleRole(r.role)} />
+                    <span class="aud-role__name">${r.role}</span>
+                    <span class="aud-role__count">${r.count}</span>
+                    ${r.all_have_phone && html`<i class="ph-light ph-chat-circle-dots aud-role__phone" title="everyone here has a phone number"></i>`}
+                  </label>
+                `)}
+              </div>
+            </div>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Subject <span class="muted">(email only, optional)</span></span>
+            <input type="text" maxlength="200" placeholder="A short headline…"
+              value=${subject} onInput=${(e) => setSubject(e.target.value)} />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Message</span>
+            <textarea rows="6" maxlength="5000" placeholder="Write your update…"
+              value=${message} onInput=${(e) => setMessage(e.target.value)}></textarea>
+          </label>
+        </div>
+
+        <footer class="sheet-footer">
+          <span class="reach ${hasAudience ? "" : "muted"}">
+            ${hasAudience ? html`<i class="ph-light ph-users-three"></i> reaches ~${reach}` : "pick an audience"}
+          </span>
+          <div class="send-actions">
+            <button class="send send--email" disabled=${busy || !hasAudience || !message.trim()} onClick=${sendEmail}>
+              <i class="ph-light ph-envelope-simple"></i> Send as email
+            </button>
+            ${canText && html`
+              <button class="send send--text" disabled=${busy} onClick=${startTexting}>
+                <i class="ph-light ph-chat-circle-dots"></i> Send as text
+              </button>
+            `}
+          </div>
+        </footer>
+      </div>
+    </div>`;
+}
+
+// ---- per-person texting run -----------------------------------------------------------
+function TextRunner({ recipients, message, onFinish }) {
+  const [done, setDone] = useState(() => new Set());
+
+  function textOne(r, i) {
+    const num = cleanPhone(r.phone);
+    if (num) frame.openExternalUrl(`sms:${num}?body=${encodeURIComponent(message)}`);
+    setDone((prev) => { const n = new Set(prev); n.add(i); return n; });
+  }
+
+  const attempted = done.size;
+
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target.classList.contains("overlay")) onFinish(attempted); }}>
+      <div class="sheet bloom">
+        <header class="sheet-header">
+          <h2><i class="ph-light ph-chat-circle-dots"></i> Send texts</h2>
+          <button class="ghost" title="Done" onClick=${() => onFinish(attempted)}><i class="ph-light ph-x icon-sm"></i></button>
+        </header>
+        <p class="runner-note muted small">
+          Tap each person to open a text with your message. Tapped names turn green so you can keep your place.
+        </p>
+        <div class="sheet-body runner-list">
+          ${recipients.map((r, i) => html`
+            <div class="runner-row ${done.has(i) ? "is-done" : ""}" key=${i}>
+              <span class="runner-who">
+                <span class="runner-name">${r.name}</span>
+                <span class="runner-phone">${r.phone}</span>
+              </span>
+              <button class="runner-send ${done.has(i) ? "is-done" : ""}" onClick=${() => textOne(r, i)}>
+                <i class="ph-light ${done.has(i) ? "ph-check" : "ph-chat-circle-dots"}"></i>
+                ${done.has(i) ? "sent" : "text"}
+              </button>
+            </div>
+          `)}
+        </div>
+        <footer class="sheet-footer">
+          <span class="reach muted"><i class="ph-light ph-check-circle"></i> ${attempted}/${recipients.length} texted</span>
+          <div class="send-actions">
+            <button class="send send--text" onClick=${() => onFinish(attempted)}>
+              <i class="ph-light ph-check"></i> Done
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>`;
+}
+
+// ---- settings -------------------------------------------------------------------------
+function SettingsModal({ settings, roles, onClose, onSaved }) {
+  const [title, setTitle] = useState(settings.title || "");
+  const [allowPublic, setAllowPublic] = useState(!!settings.allow_public_viewing);
+  const [publicRoles, setPublicRoles] = useState(new Set(settings.public_roles || []));
+
+  // Roles known from the roster, unioned with any already-saved public roles that may no
+  // longer have members, so the owner can still see / unset them.
+  const allRoles = useMemo(() => {
+    const s = new Set(roles.map((r) => r.role));
+    for (const r of settings.public_roles || []) s.add(r);
+    return Array.from(s).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [roles, settings]);
+
+  function toggle(role) {
+    setPublicRoles((prev) => { const n = new Set(prev); n.has(role) ? n.delete(role) : n.add(role); return n; });
+  }
+
+  async function save() {
+    try {
+      await frame.api("api/settings", {
+        title: title.trim(),
+        allow_public_viewing: allowPublic,
+        public_roles: Array.from(publicRoles),
+      });
+      onSaved();
+    } catch (e) { await frame.alert(e.message || "failed"); }
+  }
+
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target.classList.contains("overlay")) onClose(); }}>
+      <div class="sheet bloom sheet--narrow">
+        <header class="sheet-header">
+          <h2><i class="ph-light ph-gear"></i> Settings</h2>
+          <button class="ghost" title="Close" onClick=${onClose}><i class="ph-light ph-x icon-sm"></i></button>
+        </header>
+        <div class="sheet-body">
+          <label class="field">
+            <span class="field-label">Board title</span>
+            <input type="text" maxlength="80" value=${title} onInput=${(e) => setTitle(e.target.value)} />
+          </label>
+
+          <label class="field row-field">
+            <input type="checkbox" checked=${allowPublic} onChange=${(e) => setAllowPublic(e.target.checked)} />
+            <span><i class="ph-light ph-globe-hemisphere-west"></i> Let public (anonymous) viewers see a message history</span>
+          </label>
+
+          ${allowPublic && html`
+            <div class="field">
+              <span class="field-label">Show messages sent to these roles publicly</span>
+              <div class="role-checks">
+                ${allRoles.length === 0 && html`<div class="muted small">No roles yet — add members first.</div>`}
+                ${allRoles.map((role) => html`
+                  <label class="role-check ${publicRoles.has(role) ? "is-on" : ""}" key=${role}>
+                    <input type="checkbox" checked=${publicRoles.has(role)} onChange=${() => toggle(role)} />
+                    <span>${role}</span>
+                  </label>
+                `)}
+              </div>
+              <p class="muted small">Only role-targeted messages whose every role is checked appear publicly. "Everyone" messages are never shown publicly.</p>
+            </div>
+          `}
+        </div>
+        <footer class="sheet-footer end">
+          <button class="ghost" onClick=${onClose}>cancel</button>
+          <button class="send" onClick=${save}><i class="ph-light ph-check"></i> save</button>
+        </footer>
+      </div>
+    </div>`;
+}
+
+render(html`<${App}/>`, document.getElementById("root"));
+</script>
+</body>
+</html>
