@@ -80,6 +80,9 @@ body {
   gap: var(--os-sp-md);
   padding: var(--os-sp-sm) var(--os-sp-md);
   border-bottom: 1px solid var(--os-border-color-subtle);
+  /* Light per-role color band (see roleChannel); transparent for legacy roles. */
+  background: color-mix(in srgb, var(--row-ch, transparent) 9%, transparent);
+  border-radius: var(--os-radius-sm);
 }
 
 .member__main {
@@ -141,10 +144,6 @@ body {
 .contact-link:focus-visible {
   outline: none;
   box-shadow: var(--os-focus-ring);
-}
-
-.meta-added {
-  color: var(--os-text-subtle);
 }
 
 .member__role {

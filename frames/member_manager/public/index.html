@@ -19,6 +19,17 @@ function fmtDate(ms) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Maps a member's role to one of the 12 identity channels (c1–c12) by its index
+// in the configured role list, so each role gets a stable color band. Returns the
+// channel number, or null for a legacy/unknown role (no wash). Offset by +2 so the
+// bands start at c3: c2 is red (reads as an error state), so this pushes it to the
+// very end of the cycle (only reached if there are 12+ roles).
+function roleChannel(role, roles) {
+  const i = roles.indexOf(role);
+  if (i < 0) return null;
+  return ((i + 2) % 12) + 1;
+}
+
 function App() {
   const [state, setState] = useState(null); // { prefs, viewer, can_edit }
   const [members, setMembers] = useState([]);
@@ -219,20 +230,15 @@ function MemberList({ publicDisabled, members, viewer, canEdit, hasPhone, roles,
 function MemberRow({ member, canEdit, hasPhone, roles, onUpdate, onDelete }) {
   const knownRole = roles.includes(member.role);
   const [showContact, setShowContact] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const phone = (member.phone || "").trim();
+  const ch = roleChannel(member.role, roles);
+  const rowStyle = ch ? `--row-ch: var(--os-c${ch});` : "";
+  const addedTitle = member._created_at ? `Added ${fmtDate(member._created_at)}` : "";
 
-  async function editClick() {
-    const name = await frame.prompt("Name", { defaultValue: member.name });
-    if (name === null) return;
-    const email = await frame.prompt("Email", { defaultValue: member.email });
-    if (email === null) return;
-    const patch = { name: name.trim(), email: email.trim() };
-    if (hasPhone) {
-      const ph = await frame.prompt("Phone (optional)", { defaultValue: member.phone || "" });
-      if (ph === null) return;
-      patch.phone = ph.trim();
-    }
+  function saveEdit(patch) {
     onUpdate(member, patch);
+    setShowEdit(false);
   }
 
   async function deleteClick() {
@@ -245,9 +251,9 @@ function MemberRow({ member, canEdit, hasPhone, roles, onUpdate, onDelete }) {
   }
 
   return html`
-    <div class="member">
+    <div class="member" style=${rowStyle}>
       <div class="member__main">
-        <div class="member__name">${member.name}</div>
+        <div class="member__name" title=${addedTitle}>${member.name}</div>
         <div class="member__meta">
           <button class="contact-link" title="Send email" onClick=${emailClick}>
             <i class="ph-light ph-envelope-simple"></i>${member.email}
@@ -257,10 +263,10 @@ function MemberRow({ member, canEdit, hasPhone, roles, onUpdate, onDelete }) {
               <i class="ph-light ph-phone"></i>${phone}
             </button>
           `}
-          <span class="meta-added">added ${fmtDate(member._created_at)}</span>
         </div>
       </div>
       ${showContact && html`<${ContactModal} name=${member.name} phone=${phone} onClose=${() => setShowContact(false)} />`}
+      ${showEdit && html`<${EditMemberDialog} member=${member} hasPhone=${hasPhone} onClose=${() => setShowEdit(false)} onSave=${saveEdit} />`}
       <div class="member__role">
         ${canEdit ? html`
           <select class="role-select" value=${member.role}
@@ -272,7 +278,7 @@ function MemberRow({ member, canEdit, hasPhone, roles, onUpdate, onDelete }) {
       </div>
       ${canEdit && html`
         <div class="member__actions">
-          <button class="edit" title="Edit" onClick=${editClick}>
+          <button class="edit" title="Edit" onClick=${() => setShowEdit(true)}>
             <i class="ph-light ph-pencil-simple icon-sm"></i>
           </button>
           <button class="danger delete" title="Remove" onClick=${deleteClick}>
@@ -311,6 +317,56 @@ function ContactModal({ name, phone, onClose }) {
           </button>
         </div>
         <button class="contact-cancel" onClick=${onClose}>cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function EditMemberDialog({ member, hasPhone, onClose, onSave }) {
+  const [name, setName] = useState(member.name || "");
+  const [email, setEmail] = useState(member.email || "");
+  const [phone, setPhone] = useState(member.phone || "");
+
+  async function save() {
+    const n = name.trim();
+    const em = email.trim();
+    if (!n) { await frame.alert("Name is required."); return; }
+    if (!em) { await frame.alert("Email is required."); return; }
+    const patch = { name: n, email: em };
+    if (hasPhone) patch.phone = phone.trim();
+    onSave(patch);
+  }
+
+  return html`
+    <div class="overlay" onClick=${(e) => { if (e.target.classList.contains("overlay")) onClose(); }}>
+      <div class="surface dialog">
+        <header class="dialog-header">
+          <h2>Edit member</h2>
+          <button class="ghost" title="Close" onClick=${onClose}>
+            <i class="ph-light ph-x icon-sm"></i>
+          </button>
+        </header>
+        <label class="field">
+          <span>Name</span>
+          <input type="text" maxlength="120" autocomplete="off"
+            value=${name} onInput=${(e) => setName(e.target.value)} />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input type="email" maxlength="200" autocomplete="off"
+            value=${email} onInput=${(e) => setEmail(e.target.value)} />
+        </label>
+        ${hasPhone && html`
+          <label class="field">
+            <span>Phone (optional)</span>
+            <input type="tel" maxlength="40" autocomplete="off"
+              value=${phone} onInput=${(e) => setPhone(e.target.value)} />
+          </label>
+        `}
+        <div class="dialog-actions">
+          <button class="ghost" onClick=${onClose}>cancel</button>
+          <button onClick=${save}>save</button>
+        </div>
       </div>
     </div>
   `;

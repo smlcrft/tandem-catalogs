@@ -292,7 +292,7 @@
       "name": "Member Manager",
       "description": "View and manage a roster of people and their roles within an organization, including an optional phone number for each member. Member entries are stored in a shared SyncTable so every space member sees the same list. Email is a one-tap mailto link; a phone number offers a call/text chooser. Per-placement preferences (org name, available roles, edit policy) are stored in a local JSON file.",
       "icon": "",
-      "modified_at": "2026-06-27T12:44:31Z",
+      "modified_at": "2026-06-27T13:24:33Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 0,
@@ -306,7 +306,7 @@
         "web_scripts": []
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_manager.tar.gz",
-      "package_sha256": "7c91baa59920a51e8f47edddfbda065a4b93ded6faa8e1565f071661b51f164a",
+      "package_sha256": "ae6021a895d4a2f091d438dcc4b8ec67d07a92de1261d344848c8de7e294a93f",
       "app_version_min": "0.1.8"
     },
     {

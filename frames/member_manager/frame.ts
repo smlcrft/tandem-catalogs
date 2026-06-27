@@ -122,7 +122,15 @@ self.onNetworkRequest = async function (replyPort, reqPath, method, _headers, qu
       return jsonReply(replyPort, 200, { rows: [], public_disabled: true });
     }
     const { rows } = await members.query({ limit: 1000 });
-    rows.sort((a, b) => Number(a._created_at) - Number(b._created_at));
+    // Group by role (in the configured role order), then alphabetically by name
+    // within each role. Legacy/unknown roles sort to the end, then by name.
+    const roleRank = new Map(prefs.roles.map((r, i) => [r, i]));
+    const rankOf = (role: unknown) => roleRank.has(String(role)) ? roleRank.get(String(role))! : Number.MAX_SAFE_INTEGER;
+    rows.sort((a, b) => {
+      const ra = rankOf(a.role), rb = rankOf(b.role);
+      if (ra !== rb) return ra - rb;
+      return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+    });
     if (peer.is_anon) {
       // Public read-only view: name + role only — strip email and any other fields.
       const publicRows = rows.map((r: Record<string, unknown>) => ({
