@@ -33,7 +33,7 @@
       "name": "Checklist",
       "description": "A simple, collaborative to-do list. Each placement is its own list \u2014 any member of the space can add tasks, cycle each task through three states (unstarted, in-progress, complete), drag to reorder, and delete. Non-members get a live read-only view. Items, ordering, and states are stored in a lightweight local SQLite database keyed by placement, and every change is pushed live to all viewers.",
       "icon": "",
-      "modified_at": "2026-06-04T17:28:44Z",
+      "modified_at": "2026-06-30T17:28:44Z",
       "frame_preview": {
         "frame_type": "Tandem",
         "default_width_px": 420,
@@ -47,7 +47,7 @@
         "web_scripts": []
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/checklist.tar.gz",
-      "package_sha256": "1d58407b01a93d0876a951244b535f8d884bf6cfe429ece1de16e51ee284c3ee",
+      "package_sha256": "efa9e25ca84c233d56c3c97075a36df3a7e01600d789694c11129a36cd32a0ba",
       "app_version_min": "0.1.7"
     },
     {
@@ -330,6 +330,29 @@
       },
       "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/member_reachout.tar.gz",
       "package_sha256": "c30bd13a4ebdf6f5f530c3913e2d768e91fbb14d0d07a960b7b05f9f0a04bbd7",
+      "app_version_min": "0.1.8"
+    },
+    {
+      "kind": "Frames",
+      "id": "outpost",
+      "name": "Outpost",
+      "description": "A lightweight public posting board for sharing with the world. Space members (editors) publish short posts \u2014 a passing thought, an open question, a status update, an announcement, a quick poll, or an image / audio / video clip \u2014 and anyone with the frame's share link can read them. Each post shows its author and the time it was shared, and URLs in the text become clickable (opened safely in the reader's browser). Posts live entirely in the frame's own data folder: one subfolder per placement holds a local SQLite database (posts, media rows, and poll votes \u2014 indexed so a large, active feed stays fast) plus a per-post subfolder for any attached media bytes. Local file only, no sync tables.",
+      "icon": "",
+      "modified_at": "2026-07-01T01:45:00Z",
+      "frame_preview": {
+        "frame_type": "Tandem",
+        "default_width_px": 480,
+        "default_height_px": 640,
+        "depends_on_capabilities": []
+      },
+      "capability_preview": null,
+      "permissions": {
+        "net": [],
+        "web": [],
+        "web_scripts": []
+      },
+      "package_url": "https://raw.githubusercontent.com/smlcrft/tandem-catalogs/main/packages/frames/outpost.tar.gz",
+      "package_sha256": "4d152c77c1d0e59fa2946f667a14af6192b3992c7260e29772a14a48f70c599c",
       "app_version_min": "0.1.8"
     },
     {

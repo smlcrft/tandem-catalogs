@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outpost</title>
+  <link rel="stylesheet" href="dyn/frame-prefs.css">
+  <style>
+    :root { --ch: var(--os-c6); }          /* frame accent */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: var(--os-font-sans); background: var(--os-bg);
+      color: var(--os-text); font-size: var(--os-fs-base);
+    }
+    main {
+      max-width: 620px; margin: 0 auto; min-height: 100%;
+      padding: clamp(var(--os-sp-sm), 3.5vw, var(--os-sp-xl));
+      display: flex; flex-direction: column; gap: var(--os-sp-md);
+    }
+
+    /* Header */
+    .header { display: flex; align-items: flex-start; gap: var(--os-sp-sm); }
+    .header > i.brand { font-size: 22px; color: var(--ch); margin-top: 2px; }
+    .header .titles { flex: 1; min-width: 0; }
+    .header h1 { margin: 0; font-size: var(--os-fs-lg); font-weight: var(--os-weight-semibold); word-break: break-word; }
+    .header .tagline { margin: 2px 0 0; font-size: var(--os-fs-sm); color: var(--os-text-muted); word-break: break-word; }
+    .header .mode {
+      font-size: var(--os-fs-2xs); color: var(--os-text-muted);
+      font-family: var(--os-font-mono); text-transform: lowercase; white-space: nowrap; margin-top: 3px;
+    }
+    .gear {
+      background: none; border: 0; cursor: pointer; color: var(--os-text-muted);
+      padding: 4px; border-radius: var(--os-radius-sm); font-size: 18px; line-height: 0;
+      display: flex; align-items: center; transition: color 150ms, background 150ms; margin-top: 1px;
+    }
+    .gear:hover, .gear.on { color: var(--ch); background: var(--os-bg-subtle); }
+
+    /* Cards */
+    .card {
+      background: var(--os-bg-surface); border: 1px solid var(--os-border-color);
+      border-radius: var(--os-radius-lg); padding: var(--os-sp-md);
+      display: flex; flex-direction: column; gap: var(--os-sp-md);
+    }
+
+    .field { display: flex; flex-direction: column; gap: var(--os-sp-xs); }
+    .field > label {
+      font-family: var(--os-font-mono); font-size: var(--os-fs-2xs); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--os-text-muted);
+    }
+    input.txt, textarea.txt {
+      font: inherit; color: var(--os-text); background: var(--os-bg);
+      border: 1px solid var(--os-border-color); border-radius: var(--os-radius-md);
+      padding: var(--os-sp-sm); outline: none; width: 100%; resize: vertical;
+      transition: border-color 150ms, background 150ms;
+    }
+    input.txt:focus, textarea.txt:focus { border-color: var(--ch); background: var(--os-bg-surface); }
+    textarea.compose { min-height: 84px; }
+
+    /* Segmented control */
+    .seg { display: flex; border: 1px solid var(--os-border-color); border-radius: var(--os-radius-md); overflow: hidden; }
+    .seg button {
+      flex: 1; background: var(--os-bg); border: 0; cursor: pointer; padding: var(--os-sp-sm);
+      font: inherit; font-size: var(--os-fs-sm); color: var(--os-text-secondary);
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--os-sp-xs);
+      transition: background 150ms, color 150ms; min-width: 0;
+    }
+    .seg button + button { border-left: 1px solid var(--os-border-color); }
+    .seg button.active { background: var(--ch); color: var(--ch-fg); font-weight: var(--os-weight-medium); }
+    .seg button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Kind chips (composer) */
+    .kinds { display: flex; flex-wrap: wrap; gap: var(--os-sp-xs); }
+    .chip {
+      background: var(--os-bg); border: 1px solid var(--os-border-color); cursor: pointer;
+      padding: 5px var(--os-sp-sm); border-radius: 999px; font: inherit; font-size: var(--os-fs-sm);
+      color: var(--os-text-secondary); display: inline-flex; align-items: center; gap: 5px;
+      transition: background 150ms, color 150ms, border-color 150ms;
+    }
+    .chip:hover { border-color: var(--ch); color: var(--os-text); }
+    .chip.on { background: var(--ch); color: var(--ch-fg); border-color: var(--ch); }
+    .chip i { font-size: 15px; line-height: 0; }
+
+    /* Composer action row */
+    .compose-actions { display: flex; align-items: center; gap: var(--os-sp-sm); flex-wrap: wrap; }
+    .toolbtn {
+      background: var(--os-bg); border: 1px solid var(--os-border-color); cursor: pointer;
+      padding: var(--os-sp-sm) var(--os-sp-md); border-radius: var(--os-radius-md); font: inherit;
+      font-size: var(--os-fs-sm); color: var(--os-text-secondary); display: inline-flex; align-items: center; gap: 6px;
+      transition: background 150ms, color 150ms, border-color 150ms;
+    }
+    .toolbtn:hover { border-color: var(--ch); color: var(--os-text); }
+    .toolbtn.on { color: var(--ch); border-color: var(--ch); }
+    .toolbtn i { font-size: 16px; line-height: 0; }
+    .spacer { flex: 1; }
+    .btn-primary {
+      background: var(--ch); color: var(--ch-fg); border: 0; cursor: pointer;
+      padding: var(--os-sp-sm) var(--os-sp-lg); border-radius: var(--os-radius-md); font: inherit;
+      font-size: var(--os-fs-sm); font-weight: var(--os-weight-medium); display: inline-flex; align-items: center; gap: 6px;
+      transition: filter 150ms; white-space: nowrap;
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+    /* Pending attachments in composer */
+    .pending { display: flex; flex-wrap: wrap; gap: var(--os-sp-xs); }
+    .pending .pill {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+      background: var(--os-bg); border: 1px solid var(--os-border-color); border-radius: var(--os-radius-md);
+      padding: 4px var(--os-sp-sm); font-size: var(--os-fs-sm); color: var(--os-text-secondary);
+    }
+    .pending .pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pending .pill button { background: none; border: 0; cursor: pointer; color: var(--os-text-subtle); padding: 0; line-height: 0; font-size: 15px; }
+    .pending .pill button:hover { color: var(--os-cError); }
+
+    /* Poll editor rows */
+    .poll-rows { display: flex; flex-direction: column; gap: var(--os-sp-xs); }
+    .poll-row { display: flex; align-items: center; gap: var(--os-sp-xs); }
+    .poll-row button.rm { background: none; border: 0; cursor: pointer; color: var(--os-text-subtle); padding: 4px; line-height: 0; font-size: 16px; }
+    .poll-row button.rm:hover { color: var(--os-cError); }
+    .addopt { align-self: flex-start; background: none; border: 0; cursor: pointer; color: var(--ch); font: inherit; font-size: var(--os-fs-sm); display: inline-flex; align-items: center; gap: 5px; padding: 2px 0; }
+
+    /* Feed */
+    .feed { display: flex; flex-direction: column; gap: var(--os-sp-md); }
+    .post {
+      background: var(--os-bg-surface); border: 1px solid var(--os-border-color);
+      border-radius: var(--os-radius-lg); padding: var(--os-sp-md);
+      display: flex; flex-direction: column; gap: var(--os-sp-sm);
+    }
+    .post .top { display: flex; align-items: center; gap: var(--os-sp-sm); }
+    .post .avatar {
+      width: 28px; height: 28px; border-radius: 999px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      background: color-mix(in srgb, var(--ch) 22%, transparent); color: var(--ch);
+      font-size: var(--os-fs-sm); font-weight: var(--os-weight-semibold); text-transform: uppercase;
+    }
+    .post .who { flex: 1; min-width: 0; line-height: 1.2; }
+    .post .who .name { font-size: var(--os-fs-sm); font-weight: var(--os-weight-medium); }
+    .post .who .when { font-size: var(--os-fs-2xs); font-family: var(--os-font-mono); color: var(--os-text-muted); display: inline-flex; align-items: center; gap: 4px; }
+    .post .kindtag {
+      font-size: var(--os-fs-2xs); font-family: var(--os-font-mono); color: var(--os-text-muted);
+      display: inline-flex; align-items: center; gap: 4px; text-transform: lowercase;
+    }
+    .post .kindtag i { font-size: 13px; }
+    .post .body { font-size: var(--os-fs-base); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .post .body a { color: var(--ch); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--ch) 40%, transparent); cursor: pointer; }
+    .post .body a:hover { border-bottom-color: var(--ch); }
+    .iconbtn {
+      flex: 0 0 auto; background: none; border: 0; cursor: pointer; padding: 5px; line-height: 0;
+      font-size: 16px; color: var(--os-text-subtle); border-radius: var(--os-radius-sm);
+      display: flex; align-items: center; transition: color 150ms, background 150ms, opacity 150ms; opacity: 0;
+    }
+    .post:hover .iconbtn { opacity: 1; }
+    .iconbtn.del:hover { color: var(--os-cError); }
+    .iconbtn.del.armed { opacity: 1; color: var(--os-cError); background: var(--os-cError-muted); }
+
+    /* Media */
+    .media { display: flex; flex-direction: column; gap: var(--os-sp-xs); }
+    .media img, .media video { max-width: 100%; border-radius: var(--os-radius-md); display: block; background: var(--os-bg); }
+    .media audio { width: 100%; }
+    .media .filelink {
+      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+      background: var(--os-bg); border: 1px solid var(--os-border-color); border-radius: var(--os-radius-md);
+      padding: var(--os-sp-sm); color: var(--os-text-secondary); font-size: var(--os-fs-sm); cursor: pointer;
+      transition: border-color 150ms, color 150ms;
+    }
+    .media .filelink:hover { border-color: var(--ch); color: var(--os-text); }
+    .media .filelink i { font-size: 18px; color: var(--ch); }
+
+    /* Poll (read/vote) */
+    .poll { display: flex; flex-direction: column; gap: 6px; }
+    .poll .opt {
+      position: relative; overflow: hidden; cursor: pointer; text-align: left;
+      background: var(--os-bg); border: 1px solid var(--os-border-color); border-radius: var(--os-radius-md);
+      padding: var(--os-sp-sm) var(--os-sp-md); font: inherit; font-size: var(--os-fs-sm); color: var(--os-text);
+      display: flex; align-items: center; gap: var(--os-sp-sm); transition: border-color 150ms;
+    }
+    .poll .opt:hover:not(:disabled) { border-color: var(--ch); }
+    .poll .opt:disabled { cursor: default; }
+    .poll .opt .bar {
+      position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--ch) 16%, transparent);
+      z-index: 0; transition: width 300ms var(--os-ease-spring, ease);
+    }
+    .poll .opt.chosen .bar { background: color-mix(in srgb, var(--ch) 30%, transparent); }
+    .poll .opt .lbl { position: relative; z-index: 1; flex: 1; }
+    .poll .opt .pct { position: relative; z-index: 1; font-family: var(--os-font-mono); font-size: var(--os-fs-2xs); color: var(--os-text-muted); }
+    .poll .opt.chosen .lbl { font-weight: var(--os-weight-medium); }
+    .poll .tally { font-size: var(--os-fs-2xs); font-family: var(--os-font-mono); color: var(--os-text-muted); }
+    .poll .votenote { display: inline-flex; align-items: center; gap: 4px; font-size: var(--os-fs-2xs); color: var(--os-text-subtle); }
+    .poll .votenote i { font-size: 13px; }
+
+    .empty { color: var(--os-text-muted); font-size: var(--os-fs-sm); text-align: center; padding: var(--os-sp-xl) var(--os-sp-md); }
+    .empty i { font-size: 30px; color: var(--os-text-subtle); display: block; margin-bottom: var(--os-sp-sm); }
+    .loadmore {
+      align-self: center; margin: var(--os-sp-xs) auto var(--os-sp-md);
+      background: var(--os-bg-surface); border: 1px solid var(--os-border-color);
+      border-radius: var(--os-radius-md); padding: var(--os-sp-sm) var(--os-sp-lg);
+      font: inherit; font-size: var(--os-fs-sm); color: var(--os-text-secondary); cursor: pointer;
+      transition: border-color 150ms, color 150ms;
+    }
+    .loadmore:hover:not(:disabled) { border-color: var(--ch); color: var(--os-text); }
+    .loadmore:disabled { opacity: 0.6; cursor: default; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import { frame, html, render, useState, useEffect, useRef, useCallback, useFramePush, applyChannel } from "/lib/js/framelib.js";
+
+    const PAGE = 15;
+
+    const MAX_MEDIA_MB = 50;
+    const KIND_META = {
+      thought:      { icon: "ph-chat-teardrop-text", label: "thought" },
+      question:     { icon: "ph-question",           label: "question" },
+      status:       { icon: "ph-broadcast",          label: "status" },
+      announcement: { icon: "ph-megaphone",          label: "news" },
+    };
+    const KIND_ORDER = ["thought", "question", "status", "announcement"];
+
+    function fmtSize(n) {
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+      return (n / (1024 * 1024)).toFixed(1) + " MB";
+    }
+    function fmtWhen(ms) {
+      const d = Date.now() - ms;
+      if (d < 45 * 1000) return "just now";
+      if (d < 60 * 60 * 1000) return Math.round(d / 60000) + "m ago";
+      if (d < 24 * 60 * 60 * 1000) return Math.round(d / 3600000) + "h ago";
+      if (d < 7 * 24 * 60 * 60 * 1000) return Math.round(d / 86400000) + "d ago";
+      try { return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+      catch { return new Date(ms).toISOString().slice(0, 10); }
+    }
+    function withSfi(p) {
+      try {
+        const sfi = new URLSearchParams(location.search).get("sfi");
+        if (sfi && !/[?&]sfi=/.test(p)) return p + (p.includes("?") ? "&" : "?") + "sfi=" + encodeURIComponent(sfi);
+      } catch (_) {}
+      return p;
+    }
+
+    // Turn bare URLs in post text into clickable links routed through the host's
+    // open-in-browser confirm flow (frames can't navigate the top window themselves).
+    const URL_RE = /((?:https?:\/\/|www\.)[^\s]+)/gi;
+    function linkify(text) {
+      const out = [];
+      let last = 0, m;
+      URL_RE.lastIndex = 0;
+      while ((m = URL_RE.exec(text)) !== null) {
+        if (m.index > last) out.push(text.slice(last, m.index));
+        let url = m[0], trail = "";
+        const tm = url.match(/[.,:;!?)\]}'"]+$/);
+        if (tm) { trail = tm[0]; url = url.slice(0, -trail.length); }
+        const href = url.startsWith("www.") ? "https://" + url : url;
+        out.push(html`<a onClick=${(e) => { e.preventDefault(); frame.openExternalUrl(href); }}>${url}</a>`);
+        if (trail) out.push(trail);
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) out.push(text.slice(last));
+      return out;
+    }
+
+    // ---- Composer -----------------------------------------------------------------------
+    function Composer({ onPosted }) {
+      const [text, setText]     = useState("");
+      const [kind, setKind]     = useState("thought");
+      const [files, setFiles]   = useState([]);
+      const [pollOn, setPollOn] = useState(false);
+      const [opts, setOpts]     = useState(["", ""]);
+      const [busy, setBusy]     = useState(false);
+      const fileInput = useRef(null);
+
+      function addFiles(list) {
+        const arr = [...list].filter((f) => {
+          if (f.size > MAX_MEDIA_MB * 1024 * 1024) { frame.alert(`"${f.name}" is over the ${MAX_MEDIA_MB} MB limit.`); return false; }
+          return true;
+        });
+        setFiles((cur) => [...cur, ...arr].slice(0, 6));
+      }
+
+      const pollOpts = opts.map((o) => o.trim()).filter(Boolean);
+      const canSend = !busy && (text.trim().length > 0 || files.length > 0 || (pollOn && pollOpts.length >= 2));
+
+      async function publish() {
+        if (!canSend) return;
+        setBusy(true);
+        try {
+          const bodyReq = { text, kind };
+          if (pollOn && pollOpts.length >= 2) bodyReq.poll_options = pollOpts;
+          const res = await frame.api("api/post", bodyReq).catch((e) => ({ error: e.message }));
+          if (!res || res.error || !res.post_id) { await frame.alert(res?.error || "Could not post."); return; }
+          for (const f of files) {
+            const buf = await f.arrayBuffer();
+            const q = "api/post/" + res.post_id + "/media?name=" + encodeURIComponent(f.name) + "&mime=" + encodeURIComponent(f.type || "application/octet-stream");
+            const r = await frame.fetch(withSfi(q), { method: "POST", body: buf });
+            if (!r.ok) { const m = await r.json().catch(() => ({})); await frame.alert(m.error || "An attachment failed to upload."); }
+          }
+          setText(""); setKind("thought"); setFiles([]); setPollOn(false); setOpts(["", ""]);
+          onPosted();
+        } finally { setBusy(false); }
+      }
+
+      return html`
+        <div class="card">
+          <div class="kinds">
+            ${KIND_ORDER.map((k) => html`
+              <button class=${"chip" + (kind === k ? " on" : "")} onClick=${() => setKind(k)} key=${k}>
+                <i class=${"ph-light " + KIND_META[k].icon}></i>${KIND_META[k].label}
+              </button>`)}
+          </div>
+
+          <textarea class="txt compose" placeholder="Share something with the world…"
+            value=${text} onInput=${(e) => setText(e.target.value)} maxlength="4000"></textarea>
+
+          ${files.length ? html`
+            <div class="pending">
+              ${files.map((f, i) => html`
+                <span class="pill" key=${i}>
+                  <i class="ph-light ph-paperclip"></i>
+                  <span>${f.name}</span> <small style="color:var(--os-text-muted)">${fmtSize(f.size)}</small>
+                  <button title="Remove" onClick=${() => setFiles(files.filter((_, j) => j !== i))}><i class="ph-light ph-x"></i></button>
+                </span>`)}
+            </div>` : null}
+
+          ${pollOn ? html`
+            <div class="field">
+              <label>Poll options</label>
+              <div class="poll-rows">
+                ${opts.map((o, i) => html`
+                  <div class="poll-row" key=${i}>
+                    <input class="txt" placeholder=${"Option " + (i + 1)} value=${o} maxlength="120"
+                      onInput=${(e) => setOpts(opts.map((v, j) => (j === i ? e.target.value : v)))} />
+                    ${opts.length > 2 ? html`<button class="rm" title="Remove option" onClick=${() => setOpts(opts.filter((_, j) => j !== i))}><i class="ph-light ph-x"></i></button>` : null}
+                  </div>`)}
+              </div>
+              ${opts.length < 6 ? html`<button class="addopt" onClick=${() => setOpts([...opts, ""])}><i class="ph-light ph-plus-circle"></i>Add option</button>` : null}
+            </div>` : null}
+
+          <div class="compose-actions">
+            <button class="toolbtn" onClick=${() => fileInput.current?.click()}>
+              <i class="ph-light ph-image"></i>Media
+            </button>
+            <button class=${"toolbtn" + (pollOn ? " on" : "")} onClick=${() => setPollOn(!pollOn)}>
+              <i class="ph-light ph-list-checks"></i>Poll
+            </button>
+            <input ref=${fileInput} type="file" multiple style="display:none"
+              accept="image/*,video/*,audio/*"
+              onChange=${(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+            <div class="spacer"></div>
+            <button class="btn-primary" disabled=${!canSend} onClick=${publish}>
+              <i class="ph-light ${busy ? "ph-spinner-gap" : "ph-paper-plane-tilt"}"></i>${busy ? "Posting…" : "Post"}
+            </button>
+          </div>
+        </div>`;
+    }
+
+    // ---- A single post ------------------------------------------------------------------
+    function PostCard({ post, canVote, onPatch, onRemove }) {
+      const [armed, setArmed] = useState(false);
+      const armRef = useRef(null);
+      const km = KIND_META[post.kind] || KIND_META.thought;
+      const initial = (post.author || "?").trim().charAt(0) || "?";
+
+      async function del() {
+        if (!armed) { setArmed(true); if (armRef.current) clearTimeout(armRef.current); armRef.current = setTimeout(() => setArmed(false), 2500); return; }
+        setArmed(false); if (armRef.current) clearTimeout(armRef.current);
+        const r = await frame.api("api/delete/" + post.id, {}, "POST").catch(() => null);
+        if (r && r.ok) onRemove(post.id);
+      }
+      async function vote(i) {
+        if (!canVote) return;
+        // Returns just this post — patch it in place so a reader deep in the feed keeps scroll.
+        const r = await frame.api("api/vote", { post_id: post.id, option: i }).catch(() => null);
+        if (r && r.post) onPatch(r.post);
+      }
+      async function download(m) {
+        try {
+          const res = await frame.fetch(withSfi("api/media/" + post.id + "/" + m.id));
+          if (!res.ok) { await frame.alert("Download failed."); return; }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = m.name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } catch (_) { await frame.alert("Download failed."); }
+      }
+
+      return html`
+        <div class="post">
+          <div class="top">
+            <div class="avatar">${initial}</div>
+            <div class="who">
+              <div class="name">${post.author}</div>
+              <div class="when"><i class="ph-light ph-clock"></i>${fmtWhen(post.created_ms)}</div>
+            </div>
+            <span class="kindtag"><i class=${"ph-light " + km.icon}></i>${km.label}</span>
+            ${post.can_delete ? html`
+              <button class=${"iconbtn del" + (armed ? " armed" : "")} title=${armed ? "Click again to delete" : "Delete"}
+                onClick=${del} onBlur=${() => setArmed(false)}>
+                <i class="ph-light ${armed ? "ph-trash" : "ph-trash-simple"}"></i>
+              </button>` : null}
+          </div>
+
+          ${post.text ? html`<div class="body">${linkify(post.text)}</div>` : null}
+
+          ${post.media.length ? html`
+            <div class="media">
+              ${post.media.map((m) => {
+                const src = withSfi("api/media/" + post.id + "/" + m.id);
+                if (m.is_image) return html`<img src=${src} alt=${m.name} loading="lazy" key=${m.id} />`;
+                if (m.is_video) return html`<video src=${src} controls preload="metadata" key=${m.id}></video>`;
+                if (m.is_audio) return html`<audio src=${src} controls preload="metadata" key=${m.id}></audio>`;
+                return html`<a class="filelink" key=${m.id} onClick=${() => download(m)}>
+                  <i class="ph-light ph-file-arrow-down"></i><span>${m.name}</span> <small style="color:var(--os-text-muted)">${fmtSize(m.size)}</small></a>`;
+              })}
+            </div>` : null}
+
+          ${post.poll ? html`
+            <div class="poll">
+              ${post.poll.options.map((label, i) => {
+                const c = post.poll.counts[i] || 0;
+                const pct = post.poll.total ? Math.round((c / post.poll.total) * 100) : 0;
+                const chosen = post.poll.my_choice === i;
+                return html`
+                  <button class=${"opt" + (chosen ? " chosen" : "")} key=${i} disabled=${!canVote}
+                    onClick=${canVote ? () => vote(i) : null}>
+                    <span class="bar" style=${"width:" + pct + "%"}></span>
+                    <span class="lbl">${label}</span>
+                    <span class="pct">${pct}%</span>
+                  </button>`;
+              })}
+              <div class="tally">
+                ${post.poll.total} vote${post.poll.total === 1 ? "" : "s"}${post.poll.my_choice != null ? " · you voted" : canVote ? " · tap to vote" : ""}
+              </div>
+              ${!canVote ? html`<div class="votenote"><i class="ph-light ph-lock-simple"></i>View in Seamside to cast your vote</div>` : null}
+            </div>` : null}
+        </div>`;
+    }
+
+    // ---- Owner settings -----------------------------------------------------------------
+    function Settings({ prefs, onSave }) {
+      const [title, setTitle]     = useState(prefs.title);
+      const [tagline, setTagline] = useState(prefs.tagline);
+      const [who, setWho]         = useState(prefs.who_can_post);
+      function save(patch) {
+        const next = { title, tagline, who_can_post: who, ...patch };
+        onSave(next);
+      }
+      return html`
+        <div class="card">
+          <div class="field">
+            <label>Heading</label>
+            <input class="txt" value=${title} maxlength="80" onInput=${(e) => setTitle(e.target.value)} onBlur=${() => save({})} />
+          </div>
+          <div class="field">
+            <label>Tagline</label>
+            <input class="txt" value=${tagline} maxlength="160" placeholder="A short description (optional)"
+              onInput=${(e) => setTagline(e.target.value)} onBlur=${() => save({})} />
+          </div>
+          <div class="field">
+            <label>Who can post</label>
+            <div class="seg">
+              <button class=${who === "editors" ? "active" : ""} onClick=${() => { setWho("editors"); save({ who_can_post: "editors" }); }}>
+                <i class="ph-light ph-users"></i><span>All editors</span>
+              </button>
+              <button class=${who === "owner" ? "active" : ""} onClick=${() => { setWho("owner"); save({ who_can_post: "owner" }); }}>
+                <i class="ph-light ph-user"></i><span>Owner only</span>
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ---- App ----------------------------------------------------------------------------
+    function App() {
+      const [meta, setMeta]   = useState(null);   // { me, prefs, can_post } — the non-feed shell
+      const [posts, setPosts] = useState([]);     // accumulating reverse-chron feed
+      const [hasMore, setHasMore]         = useState(false);
+      const [loadingMore, setLoadingMore] = useState(false);
+      const [showCfg, setCfg] = useState(false);
+
+      // Refs so the scroll observer + push handler always read fresh values, not a stale closure.
+      const postsRef      = useRef([]);
+      const hasMoreRef    = useRef(false);
+      const nextBeforeRef = useRef(null);
+      const loadingRef    = useRef(false);
+      const sentinelRef   = useRef(null);
+
+      function applyFirstPage(s) {
+        setMeta({ me: s.me, prefs: s.prefs, can_post: s.can_post, can_vote: s.can_vote });
+        postsRef.current = s.posts || [];       setPosts(s.posts || []);
+        hasMoreRef.current = !!s.has_more;       setHasMore(!!s.has_more);
+        nextBeforeRef.current = s.next_before;
+      }
+
+      useEffect(() => {
+        let cancelled = false;
+        (async () => {
+          const s = await frame.api("api/state?limit=" + PAGE).catch(() => null);
+          if (!cancelled && s) applyFirstPage(s);
+        })();
+        return () => { cancelled = true; };
+      }, []);
+
+      // Append the next older page. Reads refs so it's safe to call from the scroll observer.
+      const loadMore = useCallback(async () => {
+        if (loadingRef.current || !hasMoreRef.current || nextBeforeRef.current == null) return;
+        loadingRef.current = true; setLoadingMore(true);
+        try {
+          const r = await frame.api("api/posts?before=" + nextBeforeRef.current + "&limit=" + PAGE).catch(() => null);
+          if (r) {
+            setPosts((prev) => {
+              const seen = new Set(prev.map((p) => p.id));
+              const next = prev.concat((r.posts || []).filter((p) => !seen.has(p.id)));
+              postsRef.current = next; return next;
+            });
+            hasMoreRef.current = !!r.has_more; setHasMore(!!r.has_more);
+            nextBeforeRef.current = r.next_before;
+          }
+        } finally { loadingRef.current = false; setLoadingMore(false); }
+      }, []);
+
+      // On any live change, re-fetch the range already on screen: picks up new top posts and
+      // updated vote counts without dropping loaded pages or jumping the reader's scroll.
+      const reload = useCallback(async () => {
+        const limit = Math.max(PAGE, postsRef.current.length);
+        const s = await frame.api("api/state?limit=" + limit).catch(() => null);
+        if (s) applyFirstPage(s);
+      }, []);
+      useFramePush({ outpost_changed: reload });
+
+      // Auto-load older posts as the sentinel scrolls into view (manual button is the fallback).
+      useEffect(() => {
+        const el = sentinelRef.current;
+        if (!el || typeof IntersectionObserver === "undefined") return;
+        const io = new IntersectionObserver((entries) => {
+          if (entries.some((e) => e.isIntersecting)) loadMore();
+        }, { rootMargin: "400px" });
+        io.observe(el);
+        return () => io.disconnect();
+      }, [meta ? 1 : 0, loadMore]);
+
+      // Paint the frame with the space's identity channel once state (with space_color) lands.
+      useEffect(() => { if (meta?.me?.space_color) applyChannel(document.body, meta.me.space_color); }, [meta?.me?.space_color]);
+
+      function patchPost(updated) {
+        setPosts((prev) => { const next = prev.map((p) => (p.id === updated.id ? updated : p)); postsRef.current = next; return next; });
+      }
+      function removePost(id) {
+        setPosts((prev) => { const next = prev.filter((p) => p.id !== id); postsRef.current = next; return next; });
+      }
+
+      async function savePrefs(next) {
+        setMeta((cur) => (cur ? { ...cur, prefs: next } : cur));   // optimistic
+        const r = await frame.api("api/prefs", next).catch(() => null);
+        if (r && r.prefs) setMeta((cur) => (cur ? { ...cur, prefs: r.prefs } : cur));
+      }
+
+      if (!meta) return html`<main></main>`;
+      const { me, prefs, can_post, can_vote } = meta;
+      const mode = me.is_owner ? "owner" : me.is_sfi_editor ? "editor" : me.is_sfi_member ? "member" : (me.is_anon ? "public" : "visitor");
+
+      return html`
+        <main>
+          <div class="header">
+            <i class="ph-light ph-megaphone brand"></i>
+            <div class="titles">
+              <h1>${prefs.title || "Outpost"}</h1>
+              ${prefs.tagline ? html`<p class="tagline">${prefs.tagline}</p>` : null}
+            </div>
+            <span class="mode">${mode}</span>
+            ${me.is_owner ? html`
+              <button class=${"gear" + (showCfg ? " on" : "")} title="Settings" onClick=${() => setCfg(!showCfg)}>
+                <i class="ph-light ph-gear-six"></i>
+              </button>` : null}
+          </div>
+
+          ${me.is_owner && showCfg ? html`<${Settings} prefs=${prefs} onSave=${savePrefs} />` : null}
+
+          ${can_post ? html`<${Composer} onPosted=${reload} />` : null}
+
+          ${posts.length === 0 ? html`
+            <div class="empty">
+              <i class="ph-light ph-broadcast"></i>
+              ${can_post ? "Nothing posted yet — share the first thing above." : "Nothing has been posted here yet."}
+            </div>`
+          : html`
+            <div class="feed">
+              ${posts.map((p) => html`<${PostCard} post=${p} canVote=${can_vote} onPatch=${patchPost} onRemove=${removePost} key=${p.id} />`)}
+            </div>`}
+
+          <div ref=${sentinelRef} style="height:1px"></div>
+          ${hasMore ? html`
+            <button class="loadmore" onClick=${loadMore} disabled=${loadingMore}>
+              ${loadingMore ? "Loading…" : "Load more"}
+            </button>` : null}
+        </main>`;
+    }
+
+    render(html`<${App}/>`, document.body);
+  </script>
+</body>
+</html>

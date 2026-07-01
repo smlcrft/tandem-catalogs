@@ -1,0 +1,18 @@
+{
+    "name": "Outpost",
+    "description": "A lightweight public posting board for sharing with the world. Space members (editors) publish short posts — a passing thought, an open question, a status update, an announcement, a quick poll, or an image / audio / video clip — and anyone with the frame's share link can read them. Each post shows its author and the time it was shared, and URLs in the text become clickable (opened safely in the reader's browser). Posts live entirely in the frame's own data folder: one subfolder per placement holds a local SQLite database (posts, media rows, and poll votes — indexed so a large, active feed stays fast) plus a per-post subfolder for any attached media bytes. Local file only, no sync tables.",
+    "frame_type": "Tandem",
+    "app_version_min": "0.1.8",
+    "permissions": {
+        "net": [],
+        "web": [],
+        "web_scripts": []
+    },
+    "created_at": "2026-07-01T00:00:00Z",
+    "modified_at": "2026-07-01T01:45:00Z",
+    "depends_on_capabilities": [],
+    "default_width_px": 480,
+    "default_height_px": 640,
+    "licensed_under_cc0": true,
+    "attribution_log": []
+}
